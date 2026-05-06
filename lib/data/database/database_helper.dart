@@ -155,6 +155,20 @@ class DatabaseHelper {
       )
     ''');
 
+    // Category keywords for smart categorization
+    await db.execute('''
+      CREATE TABLE category_keywords (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category_id INTEGER NOT NULL,
+        keyword TEXT NOT NULL,
+        weight INTEGER NOT NULL DEFAULT 1,
+        FOREIGN KEY (category_id) REFERENCES categories (id)
+      )
+    ''');
+
+    await db.execute('CREATE INDEX idx_category_keywords_category_id ON category_keywords (category_id)');
+    await db.execute('CREATE INDEX idx_category_keywords_keyword ON category_keywords (keyword)');
+
     // Create indexes for better query performance
     await db.execute('CREATE INDEX idx_transactions_account_id ON transactions (account_id)');
     await db.execute('CREATE INDEX idx_transactions_category_id ON transactions (category_id)');

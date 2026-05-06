@@ -5,6 +5,7 @@ import '../../providers/transaction_provider.dart';
 import '../../providers/account_provider.dart';
 import '../../providers/category_provider.dart';
 import '../../../data/models/transaction.dart';
+import '../../../core/services/smart_categorization.dart';
 
 class AddTransactionPage extends StatefulWidget {
   final Transaction? transaction;
@@ -24,7 +25,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   int? _selectedAccountId;
   int? _selectedCategoryId;
   DateTime _selectedDate = DateTime.now();
-  List<int> _suggestedCategoryIds = [];
+  List<CategorySuggestion> _suggestedCategories = [];
+  final SmartCategorization _smartCategorization = SmartCategorization();
 
   @override
   void initState() {
@@ -37,6 +39,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   Future<void> _loadData() async {
     await context.read<AccountProvider>().loadAccounts();
     await context.read<CategoryProvider>().loadCategories();
+    await context.read<TransactionProvider>().loadTransactions();
     if (mounted) {
       setState(() {
         if (context.read<AccountProvider>().accounts.isNotEmpty) {
@@ -46,38 +49,32 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     }
   }
 
+  void _updateSuggestions() {
+    final desc = _descriptionController.text;
+    final amount = double.tryParse(_amountController.text);
+    final date = _selectedDate.millisecondsSinceEpoch;
+
+    final categories = context.read<CategoryProvider>().categories
+        .where((c) => c.type == _type)
+        .toList();
+    final transactions = context.read<TransactionProvider>().transactions;
+
+    final suggestions = _smartCategorization.suggestCategories(
+      description: desc,
+      categories: categories,
+      transactions: transactions,
+      amount: amount,
+      date: date,
+    );
+
+    setState(() => _suggestedCategories = suggestions);
+  }
+
   @override
   void dispose() {
     _amountController.dispose();
     _descriptionController.dispose();
     super.dispose();
-  }
-
-  void _updateSuggestions() {
-    final desc = _descriptionController.text.toLowerCase();
-    if (desc.isEmpty) {
-      setState(() => _suggestedCategoryIds = []);
-      return;
-    }
-
-    final categories = context.read<CategoryProvider>().categories
-        .where((c) => c.type == _type)
-        .toList();
-    categories.sort((a, b) => b.usageCount.compareTo(a.usageCount));
-
-    final List<int> matches = categories
-        .where((c) =>
-            c.name.toLowerCase().contains(desc) ||
-            (c.icon?.toLowerCase().contains(desc) ?? false))
-        .take(3)
-        .map((c) => c.id ?? 0)
-        .toList();
-
-    if (matches.isEmpty && categories.isNotEmpty) {
-      matches.addAll(categories.take(3).map((c) => c.id ?? 0).toList());
-    }
-
-    setState(() => _suggestedCategoryIds = matches);
   }
 
   Future<void> _selectDate() async {
@@ -253,6 +250,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 border: InputBorder.none,
                 hintText: '0.00',
               ),
+              onChanged: (_) => _updateSuggestions(),
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return '请输入金额';
@@ -338,30 +336,39 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (_suggestedCategoryIds.isNotEmpty && _selectedCategoryId == null) ...[
+                // Smart categorization suggestions
+                if (_suggestedCategories.isNotEmpty && _selectedCategoryId == null) ...[
                   const Text(
-                    '推荐分类',
-                    style: TextStyle(fontSize: 12),
+                    '✨ 智能推荐',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
-                    children: _suggestedCategoryIds.map((id) {
-                      final cat = categories.where((c) => c.id == id).firstOrNull;
-                      if (cat == null) return const SizedBox.shrink();
+                    children: _suggestedCategories.map((suggestion) {
                       return ActionChip(
                         avatar: Icon(
-                          _getCategoryIcon(cat.icon ?? 'category'),
+                          _getCategoryIcon(suggestion.category.icon ?? 'category'),
                           size: 16,
-                          color: Color(cat.color ?? 0xFF9E9E9E),
+                          color: Color(suggestion.category.color ?? 0xFF9E9E9E),
                         ),
-                        label: Text(cat.name),
-                        onPressed: () => setState(() => _selectedCategoryId = id),
+                        label: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(suggestion.category.name),
+                            Text(
+                              suggestion.reason,
+                              style: const TextStyle(fontSize: 9, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                        onPressed: () => setState(() => _selectedCategoryId = suggestion.category.id),
                       );
                     }).toList(),
                   ),
                   const SizedBox(height: 12),
                 ],
+                // All categories
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,

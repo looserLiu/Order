@@ -16,6 +16,7 @@ dependencies:
   intl: ^0.18.1
   fl_chart: ^0.66.0
   csv: ^5.1.1
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:

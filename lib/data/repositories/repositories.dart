@@ -1,4 +1,5 @@
-/// Export all repositories.
+/// Export all data layer repositories.
+export 'repositories_impl.dart';
 export 'account_repository.dart';
 export 'budget_repository.dart';
 export 'category_repository.dart';
