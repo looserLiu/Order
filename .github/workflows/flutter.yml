@@ -27,10 +27,20 @@ jobs:
 
       - run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - run: flutter build apk --debug
+      - run: flutter test
+
+      - name: Generate coverage report
+        run: |
+          dart pub global activate coverage
+          dart run coverage:coverage --lcov --out=coverage/lcov.info
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: order-debug.apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: coverage-report
+          path: coverage/
+
+      - run: flutter build apk --debug
 
       - uses: actions/upload-artifact@v4
         with:
