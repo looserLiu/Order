@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /Users/lebronlaic/Desktop/order 2>/dev/null || ls -la /Users/lebronlaic/Desktop/ 2>/dev/null)",
+      "Read(//Users/lebronlaic/Desktop/**)",
+      "Bash(ls -la ~/.claude/)",
+      "Read(//Users/lebronlaic/.claude/**)",
+      "Bash(which omc *)",
+      "Read(//Users/lebronlaic/.claude/scripts/**)"
+    ]
+  }
+}

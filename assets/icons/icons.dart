@@ -1,0 +1,2 @@
+// Assets icons placeholder
+library;
