@@ -1,9 +1,9 @@
 # 常驻循环 Agent 协议 (Resident Loop Agent Protocol)
 
 > 本文件由 Roo（常驻 agent 大脑）驱动。后台守护脚本 `scripts/loop-agent.sh`
-> 负责心跳、静态检查与自动提交；真正的"重构/优化"决策与代码改动由 Roo 在会话中执行，
-> 并写入 `LOOP_LOG.md`。若未来环境出现可用的编码引擎（如 `roo`/`claude` CLI 或 `ollama`），
-> 守护脚本可通过 `ENGINE_CMD` 接管自主编码。
+> 负责心跳、静态检查与自动提交（单实例，pidfile 锁，已修复 fork 炸弹）；
+> 真正的"重构/优化"决策与代码改动由 Roo 在会话中执行，并写入 `LOOP_LOG.md`。
+> 若未来环境出现可用的编码引擎（如 `roo`/`claude` CLI 或 `ollama`），可通过 `ENGINE_CMD` 接管自主编码。
 
 ## 循环定义 (The Loop)
 
@@ -19,7 +19,14 @@ while now < DEADLINE:
 
 - **截止时间 DEADLINE**: 2026-07-10 09:00 (Asia/Shanghai, UTC+8)
 - **无需人工审批**: 所有改动由 agent 自主决定并提交。
-- **安全原则**: 每次改动范围小且可验证；后端无编译器时只做保守/增量改动并精读确认。
+- **安全原则**: 后端无编译器时只做保守/增量改动并精读确认；前端改动必须经 tsc/eslint 验证。
+
+## 环境约束 (已探明)
+
+- `go` 编译器：当前环境缺失（标准路径与 Spotlight 均未找到）→ 后端改动无法编译验证，须保守。
+- `node` v18.15.0 可用；前端 `node_modules` 已装 → 前端可 `tsc --noEmit` / `eslint` 验证。
+- `ollama` 不可用 → 无本地 LLM 自主引擎；Roo 会话即大脑。
+- 守护进程：单实例常驻，心跳 + 前端检查 + 自动提交已验证改动。
 
 ## 待办清单 (Backlog)
 
@@ -27,7 +34,8 @@ while now < DEADLINE:
 
 ### 阶段一：重构 (Refactor)
 
-- [x] INFRA 初始化 git 仓库与 .gitignore，建立循环 harness
+- [x] INFRA 初始化 git 仓库与 .gitignore，建立循环 harness（AGENT_LOOP/LOOP_LOG/loop-agent.sh）
+- [x] FIX 修复守护脚本 fork 炸弹，确保单实例常驻
 - [ ] R1 后端：将 3013 行单体 `handlers.go` 按资源拆分为同包多文件（auth/accounts/transactions/...）
 - [ ] R2 后端：建立 `internal/repositories` 仓储层（接口 + GORM 实现），核心实体
 - [ ] R3 后端：建立 `internal/services` 服务层，承载业务逻辑（从 handler 抽出）
