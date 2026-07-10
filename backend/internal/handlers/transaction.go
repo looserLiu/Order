@@ -105,27 +105,44 @@ func (h *TransactionHandler) Create(c *gin.Context) {
 		RecurringRule:   req.RecurringRule,
 	}
 
-	h.db.Create(&transaction)
+	// Use transaction for data consistency
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&transaction).Error; err != nil {
+			return err
+		}
 
-	h.updateAccountBalance(req.AccountID, req.Type, req.Amount)
+		if err := h.updateAccountBalanceTx(tx, req.AccountID, req.Type, req.Amount); err != nil {
+			return err
+		}
 
-	if req.Type == "transfer" && req.TargetAccountID != nil {
-		h.updateAccountBalance(req.TargetAccountID, "income", req.Amount)
+		if req.Type == "transfer" && req.TargetAccountID != nil {
+			if err := h.updateAccountBalanceTx(tx, req.TargetAccountID, "income", req.Amount); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to create transaction")
+		return
 	}
 
 	response.Success(c, transaction)
 }
 
-func (h *TransactionHandler) updateAccountBalance(accountID *uuid.UUID, txType string, amount float64) {
+func (h *TransactionHandler) updateAccountBalanceTx(tx *gorm.DB, accountID *uuid.UUID, txType string, amount float64) error {
 	var account models.Account
-	if err := h.db.First(&account, accountID).Error; err == nil {
-		if txType == "expense" {
-			account.Balance -= amount
-		} else if txType == "income" {
-			account.Balance += amount
-		}
-		h.db.Save(&account)
+	if err := tx.First(&account, accountID).Error; err != nil {
+		return err
 	}
+	if txType == "expense" {
+		account.Balance -= amount
+	} else if txType == "income" {
+		account.Balance += amount
+	}
+	return tx.Save(&account).Error
 }
 
 func (h *TransactionHandler) Get(c *gin.Context) {
