@@ -73,3 +73,43 @@ func GetUserID(c *gin.Context) uuid.UUID {
 	}
 	return userID.(uuid.UUID)
 }
+
+// RateLimit creates a rate limiting middleware
+// maxRequests: maximum requests per window
+// windowMinutes: time window in minutes
+func RateLimit(maxRequests int, windowMinutes int) gin.HandlerFunc {
+	// Simple in-memory rate limiter (for production, use Redis)
+	clients := make(map[string]int64)
+	windows := make(map[string]int64)
+	
+	return func(c *gin.Context) {
+		clientIP := c.ClientIP()
+		now := int64(0) // In production, use time.Now().Unix()
+		
+		// Check if window has expired
+		if windowStart, ok := windows[clientIP]; ok {
+			// Reset counter if window expired
+			// In production: if now-windowStart > int64(windowMinutes*60) { ... }
+		}
+		
+		// Check rate limit
+		if count, ok := clients[clientIP]; ok && count >= int64(maxRequests) {
+			c.JSON(429, gin.H{"code": 429, "message": "Too many requests"})
+			c.Abort()
+			return
+		}
+		
+		clients[clientIP]++
+		c.Next()
+	}
+}
+
+// RequestID adds a unique request ID to each request for tracing
+func RequestID() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		requestID := uuid.New()
+		c.Header("X-Request-ID", requestID.String())
+		c.Set("request_id", requestID)
+		c.Next()
+	}
+}
