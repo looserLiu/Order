@@ -45,6 +45,7 @@
 ## 二、技术栈选型
 
 ### 前端
+
 - **PC端**: React 18 + TypeScript + Vite + TailwindCSS + React Query
 - **移动端**: React Native + Expo
 - **状态管理**: Zustand / Redux Toolkit
@@ -52,6 +53,7 @@
 - **UI组件**: Headless UI / Radix UI
 
 ### 后端
+
 - **语言**: Go 1.21+
 - **框架**: Gin / Fiber
 - **ORM**: GORM
@@ -61,6 +63,7 @@
 - **配置**: Viper
 
 ### 基础设施
+
 - **数据库**: PostgreSQL 15
 - **缓存**: Redis 7
 - **对象存储**: MinIO (本地兼容S3)
@@ -70,6 +73,7 @@
 ## 三、核心功能模块
 
 ### 3.1 用户模块
+
 - [x] 用户注册/登录 (邮箱、手机号)
 - [x] 第三方登录 (Google、Apple、WeChat)
 - [x] 忘记密码/重置密码
@@ -78,6 +82,7 @@
 - [x] 用户偏好设置 (主题、语言、货币)
 
 ### 3.2 账目管理模块
+
 - [x] 记账流水 (收入/支出/转账)
 - [x] 多账户支持 (银行卡、信用卡、现金、支付宝、微信等)
 - [x] 分类管理 (自定义分类、层级分类)
@@ -90,6 +95,7 @@
 - [x] OCR 拍照识别 (发票/小票)
 
 ### 3.3 资产管理模块
+
 - [x] 资产账户管理
 - [x] 资产变动记录
 - [x] 资产统计报表
@@ -97,6 +103,7 @@
 - [x] 投资账户 (股票、基金、理财)
 
 ### 3.4 预算管理模块
+
 - [x] 月度/年度预算
 - [x] 分类预算
 - [x] 预算提醒
@@ -104,6 +111,7 @@
 - [x] 预算执行分析
 
 ### 3.5 报表分析模块
+
 - [x] 日/周/月/年报表
 - [x] 收支趋势图
 - [x] 分类占比饼图
@@ -113,6 +121,7 @@
 - [x] 数据导出 (Excel、CSV、PDF)
 
 ### 3.6 高级功能
+
 - [x] 数据同步 (多设备)
 - [x] 数据导入 (支持其他记账软件数据迁移)
 - [x] 数据备份与恢复
@@ -289,6 +298,7 @@ CREATE TABLE family_transactions (
 ## 五、API 接口设计
 
 ### 5.1 认证接口
+
 ```
 POST   /api/v1/auth/register        # 用户注册
 POST   /api/v1/auth/login           # 用户登录
@@ -300,6 +310,7 @@ POST   /api/v1/auth/oauth/{provider} # 第三方登录
 ```
 
 ### 5.2 用户接口
+
 ```
 GET    /api/v1/users/me             # 获取当前用户信息
 PUT    /api/v1/users/me             # 更新用户信息
@@ -309,6 +320,7 @@ DELETE /api/v1/users/devices/:id    # 删除设备
 ```
 
 ### 5.3 账户接口
+
 ```
 GET    /api/v1/accounts             # 获取账户列表
 POST   /api/v1/accounts             # 创建账户
@@ -319,6 +331,7 @@ GET    /api/v1/accounts/:id/balance # 获取账户余额
 ```
 
 ### 5.4 分类接口
+
 ```
 GET    /api/v1/categories           # 获取分类列表
 POST   /api/v1/categories           # 创建分类
@@ -328,6 +341,7 @@ GET    /api/v1/categories/tree      # 获取分类树形结构
 ```
 
 ### 5.5 账目接口
+
 ```
 GET    /api/v1/transactions         # 获取账目列表 (支持分页、筛选)
 POST   /api/v1/transactions         # 创建账目
@@ -341,6 +355,7 @@ GET    /api/v1/transactions/export  # 导出账目
 ```
 
 ### 5.6 预算接口
+
 ```
 GET    /api/v1/budgets              # 获取预算列表
 POST   /api/v1/budgets              # 创建预算
@@ -350,6 +365,7 @@ GET    /api/v1/budgets/:id/progress # 获取预算执行进度
 ```
 
 ### 5.7 报表接口
+
 ```
 GET    /api/v1/reports/summary      # 收支摘要
 GET    /api/v1/reports/trend        # 趋势分析
@@ -361,6 +377,7 @@ GET    /api/v1/reports/export       # 导出报表
 ```
 
 ### 5.8 资产接口
+
 ```
 GET    /api/v1/assets               # 获取资产列表
 POST   /api/v1/assets               # 创建资产记录
@@ -593,16 +610,19 @@ networks:
 ## 九、核心业务流程
 
 ### 9.1 记账流程
+
 ```
 用户输入 → 账户选择 → 金额输入 → 分类选择 → (可选)标签 → (可选)商家 → (可选)备注 → (可选)附件 → 保存 → 更新账户余额 → 返回结果
 ```
 
 ### 9.2 OCR识别流程
+
 ```
 拍照/选择图片 → 上传到MinIO → 调用OCR服务 → 提取关键信息(金额、商家、日期) → 自动填充表单 → 用户确认 → 保存
 ```
 
 ### 9.3 报表生成流程
+
 ```
 选择时间范围 → 选择筛选条件 → 查询数据库 → 数据聚合计算 → 生成图表数据 → 返回前端展示
 ```
@@ -621,6 +641,7 @@ networks:
 ## 十一、开发阶段划分
 
 ### Phase 1: 核心功能 (MVP)
+
 - 用户注册/登录
 - 账户管理
 - 分类管理
@@ -628,6 +649,7 @@ networks:
 - 基础报表
 
 ### Phase 2: 增强功能
+
 - 预算管理
 - 数据导出
 - 标签系统
@@ -635,6 +657,7 @@ networks:
 - 周期记账
 
 ### Phase 3: 高级功能
+
 - OCR识别
 - 语音记账
 - 多人协作
@@ -642,6 +665,7 @@ networks:
 - 数据导入
 
 ### Phase 4: 优化与扩展
+
 - 性能优化
 - 移动端适配
 - 数据分析
@@ -649,6 +673,27 @@ networks:
 
 ---
 
-**文档版本**: v1.0
+**文档版本**: v1.1
 **创建日期**: 2026-02-28
+**最后更新**: 2026-07-10
 **技术栈**: React + TypeScript + Vite + TailwindCSS + Go + PostgreSQL + Redis + Docker
+
+## 十二、代码优化记录
+
+### 12.1 后端优化 (2026-07-10)
+
+- **handlers.go 拆分**: 将 3013 行单体文件拆分为 17 个独立处理器文件
+  - auth.go, user.go, account.go, category.go, transaction.go
+  - tag.go, budget.go, asset.go, reminder.go, notification.go
+  - search.go, import.go, csvimport.go, report.go, family.go
+  - familytransaction.go, goal.go, insurance.go, networth.go
+  - backup.go, upload.go, cashflow.go, budgetalert.go, statistics.go
+- **事务一致性**: 为创建账目添加数据库事务，确保账目和账户余额的原子性更新
+- **构造函数模式**: 为所有处理器添加 NewXxxHandler 构造函数
+
+### 12.2 前端优化 (2026-07-10)
+
+- **路由懒加载**: 使用 React.lazy 和 Suspense 实现页面级代码分割
+- **TypeScript 类型**: 添加完整的 API 接口类型定义
+- **加载状态**: 添加 LoadingSpinner 组件提升用户体验
+- **环境类型**: 添加 vite-env.d.ts 解决 Vite 环境变量类型问题
