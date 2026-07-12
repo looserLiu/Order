@@ -1,13 +1,33 @@
-import { useState } from 'react'
+import { useState, FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { aaGroupApi } from '../services/api'
+import { aaGroupApi, AAGroup, AAMember } from '../services/api'
 import { PlusIcon, TrashIcon, CalculatorIcon } from '@heroicons/react/24/outline'
+
+// Form state types
+interface GroupForm {
+  name: string
+  description: string
+  members: { name: string }[]
+}
+
+interface ExpenseForm {
+  member_id: string
+  amount: number
+  note: string
+}
+
+// Settlement type
+interface Settlement {
+  from_id: string
+  to_id: string
+  amount: number
+}
 
 export default function AAGroups() {
   const [showModal, setShowModal] = useState(false)
   const [showExpenseModal, setShowExpenseModal] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', description: '', members: [{ name: '' }] })
-  const [expenseForm, setExpenseForm] = useState({ member_id: '', amount: 0, note: '' })
+  const [form, setForm] = useState<GroupForm>({ name: '', description: '', members: [{ name: '' }] })
+  const [expenseForm, setExpenseForm] = useState<ExpenseForm>({ member_id: '', amount: 0, note: '' })
   const queryClient = useQueryClient()
 
   const { data } = useQuery({
@@ -16,7 +36,7 @@ export default function AAGroups() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => aaGroupApi.create(data),
+    mutationFn: (data: { name: string; description?: string; members: { name: string }[] }) => aaGroupApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['aa-groups'] })
       setShowModal(false)
@@ -30,7 +50,7 @@ export default function AAGroups() {
   })
 
   const addExpenseMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => aaGroupApi.addExpense(id, data),
+    mutationFn: ({ id, data }: { id: string; data: ExpenseForm }) => aaGroupApi.addExpense(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['aa-groups'] })
       setShowExpenseModal(null)
@@ -43,8 +63,8 @@ export default function AAGroups() {
     enabled: !!showExpenseModal,
   })
 
-  const groups = data?.data?.data || []
-  const settlements = settlementsData?.data?.data || []
+  const groups = (data?.data?.data || []) as AAGroup[]
+  const settlements = (settlementsData?.data?.data || []) as Settlement[]
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -76,7 +96,7 @@ export default function AAGroups() {
       </div>
 
       <div className="grid gap-4">
-        {groups.map((group: any) => (
+        {groups.map((group: AAGroup) => (
           <div key={group.id} className="card">
             <div className="flex items-start justify-between mb-4">
               <div>
@@ -91,7 +111,7 @@ export default function AAGroups() {
             <div className="mb-4">
               <p className="text-sm text-gray-500 mb-2">总费用: ¥{group.total_amount?.toFixed(2)}</p>
               <div className="space-y-2">
-                {group.members?.map((member: any) => (
+                {group.members?.map((member: AAMember) => (
                   <div key={member.id} className="flex justify-between text-sm">
                     <span>{member.name}</span>
                     <div className="flex gap-4">
@@ -114,8 +134,9 @@ export default function AAGroups() {
               </button>
               <button
                 onClick={() => aaGroupApi.getSettlements(group.id).then(r => {
-                  if (r.data.data.length > 0) {
-                    alert('结算方案: ' + r.data.data.map((s: any) => 
+                  const settlements = (r.data.data || []) as Settlement[]
+                  if (settlements.length > 0) {
+                    alert('结算方案: ' + settlements.map((s) =>
                       `${s.from_id} -> ${s.to_id}: ¥${s.amount}`
                     ).join('\n'))
                   }
@@ -205,7 +226,7 @@ export default function AAGroups() {
                   required
                 >
                   <option value="">选择成员</option>
-                  {groups.find((g: any) => g.id === showExpenseModal)?.members?.map((m: any) => (
+                  {groups.find((g) => g.id === showExpenseModal)?.members?.map((m) => (
                     <option key={m.id} value={m.id}>{m.name}</option>
                   ))}
                 </select>

@@ -3,26 +3,31 @@ package handlers
 import (
 	"net/http"
 	"time"
+
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-	"github.com/ledger/backend/internal/models"
+	"github.com/google/uuid"
+
+	"github.com/ledger/backend/internal/service"
 	"github.com/ledger/backend/pkg/middleware"
 	"github.com/ledger/backend/pkg/response"
 )
 
 type ReminderHandler struct {
-	db *gorm.DB
+	reminderService *service.ReminderService
 }
 
-func NewReminderHandler(db *gorm.DB) *ReminderHandler {
-	return &ReminderHandler{db: db}
+func NewReminderHandler(reminderService *service.ReminderService) *ReminderHandler {
+	return &ReminderHandler{reminderService: reminderService}
 }
 
 func (h *ReminderHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	var reminders []models.Reminder
-	h.db.Where("user_id = ?", userID).Order("remind_time ASC").Find(&reminders)
+	reminders, err := h.reminderService.List(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	response.Success(c, reminders)
 }
@@ -38,23 +43,26 @@ func (h *ReminderHandler) Create(c *gin.Context) {
 
 	remindTime, _ := time.Parse("2006-01-02T15:04", req.RemindTime)
 
-	reminder := models.Reminder{
-		UserID:     userID,
+	createReq := &service.ReminderCreateRequest{
 		Title:      req.Title,
 		Content:    req.Content,
 		RemindTime: remindTime,
 		RepeatType: req.RepeatType,
 		CategoryID: req.CategoryID,
-		IsActive:   req.IsActive,
 	}
 
-	h.db.Create(&reminder)
+	reminder, err := h.reminderService.Create(c.Request.Context(), userID, createReq)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	response.Success(c, reminder)
 }
 
 func (h *ReminderHandler) Update(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
 	var req CreateReminderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -62,28 +70,31 @@ func (h *ReminderHandler) Update(c *gin.Context) {
 		return
 	}
 
-	var reminder models.Reminder
-	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&reminder).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Reminder not found")
+	updates := make(map[string]interface{})
+	updates["title"] = req.Title
+	updates["content"] = req.Content
+	remindTime, _ := time.Parse("2006-01-02T15:04", req.RemindTime)
+	updates["remind_time"] = remindTime
+	updates["repeat_type"] = req.RepeatType
+	updates["is_active"] = req.IsActive
+
+	reminder, err := h.reminderService.Update(c.Request.Context(), id, userID, updates)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	remindTime, _ := time.Parse("2006-01-02T15:04", req.RemindTime)
-	reminder.Title = req.Title
-	reminder.Content = req.Content
-	reminder.RemindTime = remindTime
-	reminder.RepeatType = req.RepeatType
-	reminder.CategoryID = req.CategoryID
-	reminder.IsActive = req.IsActive
-
-	h.db.Save(&reminder)
 	response.Success(c, reminder)
 }
 
 func (h *ReminderHandler) Delete(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
-	h.db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Reminder{})
+	if err := h.reminderService.Delete(c.Request.Context(), id, userID); err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	response.SuccessWithMessage(c, "Reminder deleted", nil)
 }

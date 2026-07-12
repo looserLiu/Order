@@ -1,11 +1,29 @@
 import { useQuery } from '@tanstack/react-query'
 import { reportApi, transactionApi, accountApi, budgetApi } from '../services/api'
 import { ArrowTrendingUpIcon, ArrowTrendingDownIcon, WalletIcon, ChartBarIcon } from '@heroicons/react/24/solid'
-import { PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, LineChart, Line } from 'recharts'
+import { PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { Link } from 'react-router-dom'
 import BudgetAlerts from '../components/BudgetAlerts'
+import { Account, Budget, Transaction } from '../services/api'
 
+// Chart colors
 const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F']
+
+// Category chart data type
+interface CategoryChartData {
+  category_id: string
+  category_name: string
+  total: number
+}
+
+// Budget progress type
+interface BudgetProgress extends Budget {
+  spent: number
+  progress: number
+  category?: {
+    name?: string
+  }
+}
 
 export default function Dashboard() {
   const { data: summary } = useQuery({
@@ -43,19 +61,18 @@ export default function Dashboard() {
     queryFn: () => reportApi.monthlyCompare(),
   })
 
-  const summaryData = summary?.data?.data
-  const trendData = trend?.data?.data || []
-  const categoryChartData = categoryData?.data?.data || []
-  const accountList = accounts?.data?.data || []
-  const recentTransactions = transactions?.data?.data?.list || []
-  const budgetList = budgets?.data?.data || []
-  const monthlyCompareData = monthlyData?.data?.data || []
+  const summaryData = summary?.data.data
+  const trendData = trend?.data.data || []
+  const categoryChartData = categoryData?.data.data as CategoryChartData[] || []
+  const accountList = accounts?.data.data || []
+  const recentTransactions = transactions?.data.data?.list || []
+  const budgetList = budgets?.data.data || []
+  const monthlyCompareData = monthlyData?.data.data || []
 
-  const totalBalance = accountList.reduce((sum: number, acc: any) => sum + (acc.balance || 0), 0)
-  const currentMonth = new Date().toISOString().slice(0, 7)
+  const totalBalance = accountList.reduce((sum: number, acc: Account) => sum + (acc.balance || 0), 0)
   
-  const budgetProgress = budgetList.map((b: any) => {
-    const spent = categoryChartData.find((c: any) => c.category_id === b.category_id)?.total || 0
+  const budgetProgress: BudgetProgress[] = budgetList.map((b: Budget) => {
+    const spent = categoryChartData.find((c: CategoryChartData) => c.category_id === b.category_id)?.total || 0
     return { ...b, spent, progress: b.amount > 0 ? (spent / b.amount) * 100 : 0 }
   }).slice(0, 3)
 
@@ -109,8 +126,8 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">本月结余</p>
-              <p className={`text-2xl font-bold ${(summaryData?.income - summaryData?.expense) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                ¥{((summaryData?.income || 0) - (summaryData?.expense || 0)).toFixed(2)}
+              <p className={`text-2xl font-bold ${(summaryData?.income ?? 0) - (summaryData?.expense ?? 0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                ¥{((summaryData?.income ?? 0) - (summaryData?.expense ?? 0)).toFixed(2)}
               </p>
             </div>
             <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
@@ -127,7 +144,7 @@ export default function Dashboard() {
             <Link to="/budgets" className="text-sm text-primary-600 hover:underline">查看全部</Link>
           </div>
           <div className="space-y-4">
-            {budgetProgress.map((b: any) => (
+            {budgetProgress.map((b: BudgetProgress) => (
               <div key={b.id}>
                 <div className="flex justify-between text-sm mb-1">
                   <span>{b.category?.name || '未分类'}</span>
@@ -174,7 +191,7 @@ export default function Dashboard() {
                 paddingAngle={5}
                 dataKey="total"
               >
-                {categoryChartData.map((_: any, index: number) => (
+                {categoryChartData.map((_: CategoryChartData, index: number) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -182,7 +199,7 @@ export default function Dashboard() {
             </PieChart>
           </ResponsiveContainer>
           <div className="flex flex-wrap gap-2 mt-4">
-            {categoryChartData.slice(0, 5).map((item: any, index: number) => (
+            {categoryChartData.slice(0, 5).map((item: CategoryChartData, index: number) => (
               <div key={item.category_name} className="flex items-center gap-1 text-xs">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                 {item.category_name}
@@ -196,7 +213,7 @@ export default function Dashboard() {
         <div className="card">
           <h3 className="text-lg font-semibold mb-4">最近交易</h3>
           <div className="space-y-3">
-            {recentTransactions.map((tx: any) => (
+            {recentTransactions.map((tx: Transaction) => (
               <div key={tx.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
@@ -228,7 +245,7 @@ export default function Dashboard() {
         <div className="card">
           <h3 className="text-lg font-semibold mb-4">账户概览</h3>
           <div className="space-y-3">
-            {accountList.slice(0, 5).map((acc: any) => (
+            {accountList.slice(0, 5).map((acc: Account) => (
               <div key={acc.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100">

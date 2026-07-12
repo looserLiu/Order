@@ -1,12 +1,21 @@
-import { useState } from 'react'
+import { useState, FormEvent, ChangeEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { budgetApi, categoryApi } from '../services/api'
+import { budgetApi, categoryApi, Budget, Category } from '../services/api'
 import { PlusIcon, PencilIcon, TrashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+
+// Form state type
+interface BudgetForm {
+  category_id: string
+  amount: number
+  period: string
+  start_date: string
+  alert_threshold: number
+}
 
 export default function Budgets() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<BudgetForm>({
     category_id: '',
     amount: 0,
     period: 'monthly',
@@ -28,11 +37,11 @@ export default function Budgets() {
   const { data: progressData } = useQuery({
     queryKey: ['budgets-progress'],
     queryFn: async () => {
-      const budgets = data?.data?.data || []
-      const progressPromises = budgets.map((b: any) => budgetApi.getProgress(b.id))
+      const budgets = data?.data.data || []
+      const progressPromises = budgets.map((b: Budget) => budgetApi.getProgress(b.id))
       return Promise.all(progressPromises.map(p => p.catch(() => null)))
     },
-    enabled: !!data?.data?.data?.length,
+    enabled: !!data?.data.data?.length,
   })
 
   const createMutation = useMutation({
@@ -56,11 +65,11 @@ export default function Budgets() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['budgets'] }),
   })
 
-  const budgets = data?.data?.data || []
-  const categories = categoriesData?.data?.data || []
-  const progressList = progressData?.map((p: any) => p?.data?.data).filter(Boolean) || []
+  const budgets = data?.data.data || []
+  const categories = categoriesData?.data.data || []
+  const progressList = (progressData || []).map((p: any) => p?.data).filter(Boolean)
 
-  const openModal = (budget?: any) => {
+  const openModal = (budget?: Budget) => {
     if (budget) {
       setEditingId(budget.id)
       setForm({
@@ -88,7 +97,7 @@ export default function Budgets() {
     setEditingId(null)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     const submitData = {
       ...form,
@@ -103,7 +112,7 @@ export default function Budgets() {
   }
 
   const getCategoryName = (categoryId: string) => {
-    const cat = categories.find((c: any) => c.id === categoryId)
+    const cat = categories.find((c: Category) => c.id === categoryId)
     return cat?.name || '全部分类'
   }
 
@@ -122,7 +131,7 @@ export default function Budgets() {
       </div>
 
       <div className="grid gap-4">
-        {budgets.map((budget: any) => {
+        {budgets.map((budget: Budget) => {
           const progress = getProgress(budget.id)
           const spent = progress?.spent || 0
           const remaining = progress?.remaining || 0
@@ -133,7 +142,7 @@ export default function Budgets() {
             <div key={budget.id} className="card">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="font-semibold text-lg">{getCategoryName(budget.category_id)}</h3>
+                  <h3 className="font-semibold text-lg">{getCategoryName(budget.category_id || '')}</h3>
                   <p className="text-sm text-gray-500">
                     {budget.period === 'monthly' ? '每月' : '每年'} · ¥{budget.amount?.toFixed(2)}
                   </p>
@@ -167,7 +176,7 @@ export default function Budgets() {
               {isAlert && (
                 <div className="flex items-center gap-2 text-red-500 text-sm">
                   <ExclamationTriangleIcon className="w-4 h-4" />
-                  <span>预算已超过{int(budget.alert_threshold * 100)}%</span>
+                  <span>预算已超过{Math.floor(budget.alert_threshold * 100)}%</span>
                 </div>
               )}
             </div>
@@ -195,7 +204,7 @@ export default function Budgets() {
                   className="input"
                 >
                   <option value="">全部分类</option>
-                  {categories.filter((c: any) => c.type === 'expense').map((cat: any) => (
+                  {categories.filter((c: Category) => c.type === 'expense').map((cat: Category) => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>

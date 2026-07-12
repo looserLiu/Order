@@ -1,13 +1,27 @@
-import { useState } from 'react'
+import { useState, FormEvent, ChangeEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { transactionApi, accountApi, categoryApi } from '../services/api'
-import { PlusIcon, PencilIcon, TrashIcon, FunnelIcon } from '@heroicons/react/24/outline'
+import { transactionApi, accountApi, categoryApi, Transaction, Account, Category } from '../services/api'
+import { PlusIcon, TrashIcon, FunnelIcon } from '@heroicons/react/24/outline'
+
+// Form state type
+interface TransactionForm {
+  type: string
+  account_id: string
+  category_id: string
+  amount: number
+  merchant: string
+  note: string
+  bill_date: string
+}
+
+// Filter state type
+type TransactionFilters = Record<string, unknown>
 
 export default function Transactions() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [filters, setFilters] = useState({ type: '', category_id: '', account_id: '' })
-  const [form, setForm] = useState({
+  const [filters, setFilters] = useState<TransactionFilters>({ type: '', category_id: '', account_id: '' })
+  const [form, setForm] = useState<TransactionForm>({
     type: 'expense',
     account_id: '',
     category_id: '',
@@ -34,7 +48,7 @@ export default function Transactions() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => transactionApi.create(data),
+    mutationFn: (data: TransactionForm) => transactionApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
@@ -52,12 +66,12 @@ export default function Transactions() {
     },
   })
 
-  const transactions = txData?.data?.data?.list || []
-  const accounts = accountsData?.data?.data || []
-  const categories = categoriesData?.data?.data || []
+  const transactions = txData?.data.data?.list || []
+  const accounts = accountsData?.data.data || []
+  const categories = categoriesData?.data.data || []
 
-  const expenseCategories = categories.filter((c: any) => c.type === 'expense')
-  const incomeCategories = categories.filter((c: any) => c.type === 'income')
+  const expenseCategories = categories.filter((c: Category) => c.type === 'expense')
+  const incomeCategories = categories.filter((c: Category) => c.type === 'income')
 
   const dateRanges = [
     { label: '今天', days: 0 },
@@ -77,7 +91,7 @@ export default function Transactions() {
     })
   }
 
-  const openModal = (tx?: any) => {
+  const openModal = (tx?: Transaction) => {
     if (tx) {
       setEditingId(tx.id)
       setForm({
@@ -109,14 +123,14 @@ export default function Transactions() {
     setEditingId(null)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     const submitData = {
       ...form,
       account_id: form.account_id || undefined,
       category_id: form.category_id || undefined,
     }
-    createMutation.mutate(submitData)
+    createMutation.mutate(submitData as TransactionForm)
   }
 
   return (
@@ -143,7 +157,7 @@ export default function Transactions() {
       <div className="card">
         <div className="flex flex-wrap gap-3 mb-4">
           <select
-            value={filters.type}
+            value={filters.type as string}
             onChange={(e) => setFilters({ ...filters, type: e.target.value })}
             className="input w-auto"
           >
@@ -153,12 +167,12 @@ export default function Transactions() {
             <option value="transfer">转账</option>
           </select>
           <select
-            value={filters.account_id}
+            value={filters.account_id as string}
             onChange={(e) => setFilters({ ...filters, account_id: e.target.value })}
             className="input w-auto"
           >
             <option value="">全部账户</option>
-            {accounts.map((acc: any) => (
+            {accounts.map((acc: Account) => (
               <option key={acc.id} value={acc.id}>{acc.name}</option>
             ))}
           </select>
@@ -178,7 +192,7 @@ export default function Transactions() {
               </tr>
             </thead>
             <tbody>
-              {transactions.map((tx: any) => (
+              {transactions.map((tx: Transaction) => (
                 <tr key={tx.id} className="border-b border-gray-100">
                   <td className="py-3">{tx.bill_date?.split('T')[0]}</td>
                   <td className="py-3">
@@ -255,7 +269,7 @@ export default function Transactions() {
                   required
                 >
                   <option value="">选择账户</option>
-                  {accounts.map((acc: any) => (
+                  {accounts.map((acc: Account) => (
                     <option key={acc.id} value={acc.id}>{acc.name}</option>
                   ))}
                 </select>
@@ -268,7 +282,7 @@ export default function Transactions() {
                   className="input"
                 >
                   <option value="">选择分类</option>
-                  {(form.type === 'expense' ? expenseCategories : incomeCategories).map((cat: any) => (
+                  {(form.type === 'expense' ? expenseCategories : incomeCategories).map((cat: Category) => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>

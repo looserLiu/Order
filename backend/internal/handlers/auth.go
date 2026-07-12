@@ -6,22 +6,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 
 	"github.com/ledger/backend/internal/config"
 	"github.com/ledger/backend/internal/models"
+	"github.com/ledger/backend/internal/service"
 	"github.com/ledger/backend/pkg/middleware"
 	"github.com/ledger/backend/pkg/response"
 )
 
 type AuthHandler struct {
-	db  *gorm.DB
-	cfg *config.Config
+	userService *service.UserService
+	cfg         *config.Config
 }
 
-func NewAuthHandler(db *gorm.DB, cfg *config.Config) *AuthHandler {
-	return &AuthHandler{db: db, cfg: cfg}
+func NewAuthHandler(userService *service.UserService, cfg *config.Config) *AuthHandler {
+	return &AuthHandler{userService: userService, cfg: cfg}
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
@@ -31,32 +30,17 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	user, err := h.userService.Register(c.Request.Context(), req.Email, req.Phone, req.Password, req.Nickname)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to hash password")
+		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	user := models.User{
-		Email:        req.Email,
-		Phone:        req.Phone,
-		PasswordHash: string(hash),
-		Nickname:     req.Nickname,
-	}
-
-	if err := h.db.Create(&user).Error; err != nil {
-		response.Error(c, http.StatusBadRequest, "Email already exists")
-		return
-	}
-
-	token, err := h.generateToken(user)
+	token, err := h.generateToken(*user)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Failed to generate token")
 		return
 	}
-
-	seedCategories(h.db, user.ID)
-	seedDefaultAccount(h.db, user.ID)
 
 	response.Success(c, gin.H{"token": token, "user": user})
 }
@@ -68,18 +52,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-	if err := h.db.Where("email = ?", req.Email).First(&user).Error; err != nil {
+	// For login, we need to find user by email
+	user, err := h.userService.Login(c.Request.Context(), req.Email, req.Password)
+	if err != nil {
 		response.Error(c, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		response.Error(c, http.StatusUnauthorized, "Invalid credentials")
-		return
-	}
-
-	token, err := h.generateToken(user)
+	token, err := h.generateToken(*user)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Failed to generate token")
 		return
@@ -90,13 +70,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	var user models.User
-	if err := h.db.First(&user, userID).Error; err != nil {
+
+	user, err := h.userService.GetMe(c.Request.Context(), userID)
+	if err != nil {
 		response.Error(c, http.StatusNotFound, "User not found")
 		return
 	}
 
-	token, err := h.generateToken(user)
+	token, err := h.generateToken(*user)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Failed to generate token")
 		return

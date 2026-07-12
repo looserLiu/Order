@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import { useThemeStore } from './stores/themeStore'
 import Layout from './components/Layout'
+import { LoadingSpinner } from './components/LoadingSpinner'
 
 // Lazy load pages for better performance
 const Login = lazy(() => import('./pages/Login'))
@@ -28,15 +29,7 @@ const Debts = lazy(() => import('./pages/Debts'))
 const CSVImport = lazy(() => import('./pages/CSVImport'))
 const CashFlow = lazy(() => import('./pages/CashFlow'))
 
-// Loading component for Suspense fallback
-function LoadingSpinner() {
-  return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-    </div>
-  )
-}
-
+// Private route component
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuthStore()
   return token ? <>{children}</> : <Navigate to="/login" />
@@ -56,7 +49,7 @@ export default function App() {
   }, [theme, colorScheme])
 
   return (
-    <Suspense fallback={<LoadingSpinner />}>
+    <Suspense fallback={<LoadingSpinner fullScreen />}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { budgetAlertApi } from '../services/api'
+import { budgetAlertApi, BudgetAlert } from '../services/api'
 import { ExclamationTriangleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline'
+import { LoadingSpinner } from './LoadingSpinner'
 
 export default function BudgetAlerts() {
   const { data: alerts, isLoading } = useQuery({
@@ -33,7 +34,7 @@ export default function BudgetAlerts() {
         预算提醒
       </h2>
       <div className="space-y-3">
-        {alerts.map((alert: any) => (
+        {alerts.map((alert: BudgetAlert) => (
           <div
             key={alert.budget_id}
             className={`p-4 rounded-lg border ${

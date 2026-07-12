@@ -2,26 +2,31 @@ package handlers
 
 import (
 	"net/http"
+
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-	"github.com/ledger/backend/internal/models"
+	"github.com/google/uuid"
+
+	"github.com/ledger/backend/internal/service"
 	"github.com/ledger/backend/pkg/middleware"
 	"github.com/ledger/backend/pkg/response"
 )
 
 type CategoryHandler struct {
-	db *gorm.DB
+	categoryService *service.CategoryService
 }
 
-func NewCategoryHandler(db *gorm.DB) *CategoryHandler {
-	return &CategoryHandler{db: db}
+func NewCategoryHandler(categoryService *service.CategoryService) *CategoryHandler {
+	return &CategoryHandler{categoryService: categoryService}
 }
 
 func (h *CategoryHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	var categories []models.Category
-	h.db.Where("user_id = ? OR is_system = ?", userID, true).Order("sort_order ASC").Find(&categories)
+	categories, err := h.categoryService.List(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	response.Success(c, categories)
 }
@@ -29,8 +34,11 @@ func (h *CategoryHandler) List(c *gin.Context) {
 func (h *CategoryHandler) GetTree(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	var categories []models.Category
-	h.db.Where("user_id = ? OR is_system = ?", userID, true).Order("sort_order ASC").Find(&categories)
+	categories, err := h.categoryService.List(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	tree := buildCategoryTree(categories)
 	response.Success(c, tree)
@@ -39,58 +47,63 @@ func (h *CategoryHandler) GetTree(c *gin.Context) {
 func (h *CategoryHandler) Create(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	var req CreateCategoryRequest
+	var req service.CategoryCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	category := models.Category{
-		UserID:    userID,
-		ParentID:  req.ParentID,
-		Name:      req.Name,
-		Icon:      req.Icon,
-		Color:     req.Color,
-		Type:      req.Type,
-		SortOrder: req.SortOrder,
+	category, err := h.categoryService.Create(c.Request.Context(), userID, &req)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	h.db.Create(&category)
 	response.Success(c, category)
 }
 
 func (h *CategoryHandler) Update(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
-	var req CreateCategoryRequest
+	var req service.CategoryCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	var category models.Category
-	if err := h.db.Where("id = ? AND user_id = ? AND is_system = ?", id, userID, false).First(&category).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Category not found")
+	updates := make(map[string]interface{})
+	if req.Name != "" {
+		updates["name"] = req.Name
+	}
+	if req.ParentID != nil {
+		updates["parent_id"] = req.ParentID
+	}
+	if req.Icon != "" {
+		updates["icon"] = req.Icon
+	}
+	if req.Color != "" {
+		updates["color"] = req.Color
+	}
+	if req.Type != "" {
+		updates["type"] = req.Type
+	}
+
+	category, err := h.categoryService.Update(c.Request.Context(), id, userID, updates)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	category.Name = req.Name
-	category.ParentID = req.ParentID
-	category.Icon = req.Icon
-	category.Color = req.Color
-	category.Type = req.Type
-
-	h.db.Save(&category)
 	response.Success(c, category)
 }
 
 func (h *CategoryHandler) Delete(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
-	if err := h.db.Where("id = ? AND user_id = ? AND is_system = ?", id, userID, false).Delete(&models.Category{}).Error; err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to delete category")
+	if err := h.categoryService.Delete(c.Request.Context(), id, userID); err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 

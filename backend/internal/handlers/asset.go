@@ -3,33 +3,43 @@ package handlers
 import (
 	"net/http"
 	"time"
+
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
+	"github.com/google/uuid"
+
 	"github.com/ledger/backend/internal/models"
+	"github.com/ledger/backend/internal/service"
 	"github.com/ledger/backend/pkg/middleware"
 	"github.com/ledger/backend/pkg/response"
 )
 
 type AssetHandler struct {
-	db *gorm.DB
+	assetService *service.AssetService
 }
 
-func NewAssetHandler(db *gorm.DB) *AssetHandler {
-	return &AssetHandler{db: db}
+func NewAssetHandler(assetService *service.AssetService) *AssetHandler {
+	return &AssetHandler{assetService: assetService}
 }
 
 func (h *AssetHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	assetType := c.Query("type")
 
-	var assets []models.AssetChange
-	query := h.db.Where("user_id = ?", userID)
-	if assetType != "" {
-		query = query.Where("asset_type = ?", assetType)
+	assets, err := h.assetService.List(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
 	}
-	query.Order("created_at DESC").Find(&assets)
 
-	response.Success(c, assets)
+	// Filter by type if provided
+	var filtered []models.AssetChange
+	for _, a := range assets {
+		if assetType == "" || a.AssetType == assetType {
+			filtered = append(filtered, a)
+		}
+	}
+
+	response.Success(c, filtered)
 }
 
 func (h *AssetHandler) Create(c *gin.Context) {
@@ -56,8 +66,7 @@ func (h *AssetHandler) Create(c *gin.Context) {
 		status = req.Status
 	}
 
-	asset := models.AssetChange{
-		UserID:       userID,
+	createReq := &service.AssetCreateRequest{
 		AssetType:    req.AssetType,
 		RelatedUser:  req.RelatedUser,
 		Name:         req.Name,
@@ -65,20 +74,24 @@ func (h *AssetHandler) Create(c *gin.Context) {
 		InterestRate: req.InterestRate,
 		StartDate:    startDate,
 		EndDate:      endDate,
-		Status:       status,
 		Note:         req.Note,
 	}
 
-	h.db.Create(&asset)
+	asset, err := h.assetService.Create(c.Request.Context(), userID, createReq)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	response.Success(c, asset)
 }
 
 func (h *AssetHandler) Get(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
-	var asset models.AssetChange
-	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&asset).Error; err != nil {
+	asset, err := h.assetService.Get(c.Request.Context(), id, userID)
+	if err != nil {
 		response.Error(c, http.StatusNotFound, "Asset not found")
 		return
 	}
@@ -88,7 +101,7 @@ func (h *AssetHandler) Get(c *gin.Context) {
 
 func (h *AssetHandler) Update(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
 	var req CreateAssetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -96,62 +109,50 @@ func (h *AssetHandler) Update(c *gin.Context) {
 		return
 	}
 
-	var asset models.AssetChange
-	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&asset).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Asset not found")
-		return
-	}
+	updates := make(map[string]interface{})
+	updates["name"] = req.Name
+	updates["amount"] = req.Amount
+	updates["status"] = req.Status
+	updates["note"] = req.Note
 
 	if req.StartDate != "" {
 		t, _ := time.Parse("2006-01-02", req.StartDate)
-		asset.StartDate = &t
+		updates["start_date"] = &t
 	}
 	if req.EndDate != "" {
 		t, _ := time.Parse("2006-01-02", req.EndDate)
-		asset.EndDate = &t
+		updates["end_date"] = &t
 	}
 
-	asset.AssetType = req.AssetType
-	asset.RelatedUser = req.RelatedUser
-	asset.Name = req.Name
-	asset.Amount = req.Amount
-	asset.InterestRate = req.InterestRate
-	asset.Status = req.Status
-	asset.Note = req.Note
+	asset, err := h.assetService.Update(c.Request.Context(), id, userID, updates)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-	h.db.Save(&asset)
 	response.Success(c, asset)
 }
 
 func (h *AssetHandler) Delete(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
-	h.db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.AssetChange{})
+	if err := h.assetService.Delete(c.Request.Context(), id, userID); err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	response.SuccessWithMessage(c, "Asset deleted", nil)
 }
 
 func (h *AssetHandler) GetSummary(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	var debtOwed, debtOwing, investment float64
+	summary, err := h.assetService.GetSummary(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-	h.db.Model(&models.AssetChange{}).
-		Where("user_id = ? AND asset_type = ? AND status = ?", userID, "debt_owed", "active").
-		Select("COALESCE(SUM(amount), 0)").Scan(&debtOwed)
-
-	h.db.Model(&models.AssetChange{}).
-		Where("user_id = ? AND asset_type = ? AND status = ?", userID, "debt_owing", "active").
-		Select("COALESCE(SUM(amount), 0)").Scan(&debtOwing)
-
-	h.db.Model(&models.AssetChange{}).
-		Where("user_id = ? AND asset_type = ? AND status = ?", userID, "investment", "active").
-		Select("COALESCE(SUM(amount), 0)").Scan(&investment)
-
-	response.Success(c, gin.H{
-		"debt_owed":   debtOwed,
-		"debt_owing":  debtOwing,
-		"investment":  investment,
-		"net_worth":   debtOwed - debtOwing + investment,
-	})
+	response.Success(c, summary)
 }

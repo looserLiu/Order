@@ -1,12 +1,22 @@
-import { useState } from 'react'
+import { useState, FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { reminderApi, categoryApi } from '../services/api'
+import { reminderApi, categoryApi, Reminder, Category } from '../services/api'
 import { PlusIcon, PencilIcon, TrashIcon, BellIcon } from '@heroicons/react/24/outline'
+
+// Form state type
+interface ReminderForm {
+  title: string
+  content: string
+  remind_time: string
+  repeat_type: string
+  category_id: string
+  is_active: boolean
+}
 
 export default function Reminders() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<ReminderForm>({
     title: '',
     content: '',
     remind_time: '',
@@ -27,7 +37,7 @@ export default function Reminders() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => reminderApi.create(data),
+    mutationFn: (data: Partial<Reminder>) => reminderApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reminders'] })
       closeModal()
@@ -35,7 +45,7 @@ export default function Reminders() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => reminderApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<Reminder> }) => reminderApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reminders'] })
       closeModal()
@@ -47,10 +57,10 @@ export default function Reminders() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reminders'] }),
   })
 
-  const reminders = data?.data?.data || []
-  const categories = categoriesData?.data?.data || []
+  const reminders = (data?.data?.data || []) as Reminder[]
+  const categories = (categoriesData?.data?.data || []) as Category[]
 
-  const openModal = (reminder?: any) => {
+  const openModal = (reminder?: Reminder) => {
     if (reminder) {
       setEditingId(reminder.id)
       setForm({
@@ -80,11 +90,11 @@ export default function Reminders() {
     setEditingId(null)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    const submitData = {
+    const submitData: Partial<Reminder> = {
       ...form,
-      category_id: form.category_id || null,
+      category_id: form.category_id || undefined,
     }
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: submitData })
@@ -123,7 +133,7 @@ export default function Reminders() {
       </div>
 
       <div className="space-y-3">
-        {reminders.map((reminder: any) => (
+        {reminders.map((reminder: Reminder) => (
           <div key={reminder.id} className={`card ${!reminder.is_active ? 'opacity-50' : ''}`}>
             <div className="flex items-start justify-between">
               <div className="flex-1">
@@ -138,10 +148,10 @@ export default function Reminders() {
                 )}
                 <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
                   <span>{formatTime(reminder.remind_time)}</span>
-                  <span>{getRepeatText(reminder.repeat_type)}</span>
+                  <span>{getRepeatText(reminder.repeat_type || 'none')}</span>
                   {reminder.category_id && (
                     <span className="text-primary-600">
-                      {categories.find((c: any) => c.id === reminder.category_id)?.name}
+                      {categories.find((c) => c.id === reminder.category_id)?.name}
                     </span>
                   )}
                 </div>
@@ -225,7 +235,7 @@ export default function Reminders() {
                   className="input"
                 >
                   <option value="">无</option>
-                  {categories.filter((c: any) => c.type === 'expense').map((cat: any) => (
+                  {categories.filter((c) => c.type === 'expense').map((cat) => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>

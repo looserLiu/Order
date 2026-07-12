@@ -1,13 +1,35 @@
-import { useState } from 'react'
+import { useState, FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { assetApi } from '../services/api'
+import { assetApi, AssetChange } from '../services/api'
 import { PlusIcon, PencilIcon, TrashIcon, CurrencyDollarIcon, ArrowUpIcon, ArrowDownIcon } from '@heroicons/react/24/outline'
+
+// Form state type
+interface AssetForm {
+  asset_type: string
+  name: string
+  related_user: string
+  amount: number
+  interest_rate: number
+  start_date: string
+  end_date: string
+  note: string
+  status: string
+}
+
+// Summary response type
+interface AssetSummary {
+  total: number
+  byType: Record<string, number>
+  total_debt_owed?: number
+  total_debt_owing?: number
+  total_investment?: number
+}
 
 export default function Debts() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filter, setFilter] = useState('all')
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<AssetForm>({
     asset_type: 'debt_owed',
     name: '',
     related_user: '',
@@ -31,7 +53,7 @@ export default function Debts() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => assetApi.create(data),
+    mutationFn: (data: unknown) => assetApi.create(data as any),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assets'] })
       closeModal()
@@ -39,7 +61,7 @@ export default function Debts() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => assetApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: unknown }) => assetApi.update(id, data as any),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assets'] })
       closeModal()
@@ -53,10 +75,10 @@ export default function Debts() {
     },
   })
 
-  const assets = data?.data?.data || []
-  const summaryData = summary?.data?.data || {}
+  const assets = (data?.data?.data || []) as AssetChange[]
+  const summaryData = (summary?.data?.data || {}) as AssetSummary
 
-  const openModal = (asset?: any) => {
+  const openModal = (asset?: AssetChange) => {
     if (asset) {
       setEditingId(asset.id)
       setForm({
@@ -103,7 +125,7 @@ export default function Debts() {
 
   const settleMutation = useMutation({
     mutationFn: ({ id, amount }: { id: string; amount: number }) => 
-      assetApi.update(id, { status: 'settled', note: `已还清 ¥${amount}` }),
+      assetApi.update(id, { status: 'settled', note: `已还清 ¥${amount}` } as any),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assets'] })
     },
@@ -181,11 +203,11 @@ export default function Debts() {
               <p>暂无记录</p>
             </div>
           ) : (
-            assets.map((asset: any) => (
+            assets.map((asset: AssetChange) => (
               <div key={asset.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
                 <div className="flex items-center gap-4">
                   <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    asset.asset_type === 'debt_owed' ? 'bg-green-100' : 
+                    asset.asset_type === 'debt_owed' ? 'bg-green-100' :
                     asset.asset_type === 'debt_owing' ? 'bg-red-100' : 'bg-blue-100'
                   }`}>
                     {asset.asset_type === 'debt_owed' ? (
@@ -206,7 +228,7 @@ export default function Debts() {
                 <div className="flex items-center gap-4">
                   <div className="text-right">
                     <p className={`font-semibold text-lg ${
-                      asset.asset_type === 'debt_owed' ? 'text-green-600' : 
+                      asset.asset_type === 'debt_owed' ? 'text-green-600' :
                       asset.asset_type === 'debt_owing' ? 'text-red-500' : 'text-blue-600'
                     }`}>
                       ¥{asset.amount?.toFixed(2)}

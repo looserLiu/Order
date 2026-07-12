@@ -1,20 +1,27 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { searchApi } from '../services/api'
+import { searchApi, Transaction, Account, Category } from '../services/api'
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { Link } from 'react-router-dom'
+
+// Search result type
+interface SearchResult {
+  transactions: Transaction[]
+  accounts: Account[]
+  categories: Category[]
+}
 
 export default function Search() {
   const [keyword, setKeyword] = useState('')
   const [searchType, setSearchType] = useState('all')
 
-  const { data, isLoading } = useQuery({
+  const { data } = useQuery({
     queryKey: ['search', keyword, searchType],
     queryFn: () => searchApi.search({ q: keyword, type: searchType }),
     enabled: keyword.length > 0,
   })
 
-  const results = data?.data?.data || {}
+  const results = (data?.data?.data || {}) as SearchResult
   const transactions = results.transactions || []
   const accounts = results.accounts || []
   const categories = results.categories || []
@@ -46,17 +53,13 @@ export default function Search() {
         </select>
       </div>
 
-      {isLoading && (
-        <div className="text-center py-8 text-gray-500">搜索中...</div>
-      )}
-
-      {keyword && !isLoading && (
+      {keyword && (
         <div className="space-y-6">
           {(searchType === 'all' || searchType === 'transactions') && (
             <div className="card">
               <h3 className="font-semibold mb-4">交易记录 ({transactions.length})</h3>
               <div className="space-y-2">
-                {transactions.slice(0, 10).map((tx: any) => (
+                {transactions.slice(0, 10).map((tx: Transaction) => (
                   <Link
                     key={tx.id}
                     to={`/transactions?id=${tx.id}`}
@@ -82,7 +85,7 @@ export default function Search() {
             <div className="card">
               <h3 className="font-semibold mb-4">账户 ({accounts.length})</h3>
               <div className="space-y-2">
-                {accounts.map((acc: any) => (
+                {accounts.map((acc: Account) => (
                   <Link
                     key={acc.id}
                     to={`/accounts?id=${acc.id}`}
@@ -103,7 +106,7 @@ export default function Search() {
             <div className="card">
               <h3 className="font-semibold mb-4">分类 ({categories.length})</h3>
               <div className="flex flex-wrap gap-2">
-                {categories.map((cat: any) => (
+                {categories.map((cat: Category) => (
                   <Link
                     key={cat.id}
                     to={`/categories?id=${cat.id}`}

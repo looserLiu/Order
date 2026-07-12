@@ -1,12 +1,34 @@
-import { useState } from 'react'
+import { useState, FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { insuranceApi } from '../services/api'
+import { insuranceApi, Insurance } from '../services/api'
 import { PlusIcon, PencilIcon, TrashIcon, ShieldCheckIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+
+// Form state type
+interface InsuranceForm {
+  name: string
+  insurance_type: string
+  company: string
+  premium: number
+  payment_type: string
+  start_date: string
+  end_date: string
+  coverage: number
+  beneficiary: string
+  note: string
+}
+
+// Summary response type
+interface InsuranceSummary {
+  total_premium: number
+  active_count: number
+  expiring_count: number
+  total_coverage: number
+}
 
 export default function Insurances() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<InsuranceForm>({
     name: '',
     insurance_type: 'health',
     company: '',
@@ -31,7 +53,7 @@ export default function Insurances() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => insuranceApi.create(data),
+    mutationFn: (data: unknown) => insuranceApi.create(data as any),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['insurances'] })
       queryClient.invalidateQueries({ queryKey: ['insurances-summary'] })
@@ -40,7 +62,7 @@ export default function Insurances() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => insuranceApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: unknown }) => insuranceApi.update(id, data as any),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['insurances'] })
       closeModal()
@@ -55,10 +77,10 @@ export default function Insurances() {
     },
   })
 
-  const insurances = data?.data?.data || []
-  const summary = summaryData?.data?.data || {}
+  const insurances = (data?.data?.data || []) as Insurance[]
+  const summary = (summaryData?.data?.data || {}) as InsuranceSummary
 
-  const openModal = (ins?: any) => {
+  const openModal = (ins?: Insurance) => {
     if (ins) {
       setEditingId(ins.id)
       setForm({
@@ -168,14 +190,14 @@ export default function Insurances() {
       </div>
 
       <div className="grid gap-4">
-        {insurances.map((ins: any) => (
+        {insurances.map((ins: Insurance) => (
           <div key={ins.id} className="card">
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <h3 className="font-semibold text-lg">{ins.name}</h3>
-                  <span className={`px-2 py-0.5 rounded text-xs ${getTypeColor(ins.insurance_type)}`}>
-                    {getTypeText(ins.insurance_type)}
+                  <span className={`px-2 py-0.5 rounded text-xs ${getTypeColor(ins.insurance_type || 'health')}`}>
+                    {getTypeText(ins.insurance_type || 'health')}
                   </span>
                   {ins.status === 'expired' && (
                     <span className="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">已过期</span>
@@ -185,15 +207,15 @@ export default function Insurances() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 text-sm">
                   <div>
                     <span className="text-gray-500">保费: </span>
-                    <span className="font-medium">¥{ins.premium?.toFixed(2)}/{ins.payment_type === 'yearly' ? '年' : ins.payment_type === 'quarterly' ? '季' : '月'}</span>
+                    <span className="font-medium">¥{ins.premium?.toFixed(2) || '0'}/{ins.payment_type === 'yearly' ? '年' : ins.payment_type === 'quarterly' ? '季' : '月'}</span>
                   </div>
                   <div>
                     <span className="text-gray-500">保额: </span>
-                    <span className="font-medium">¥{ins.coverage?.toFixed(0)}</span>
+                    <span className="font-medium">¥{ins.coverage?.toFixed(0) || '0'}</span>
                   </div>
                   <div>
                     <span className="text-gray-500">生效: </span>
-                    <span className="">{ins.start_date?.split('T')[0]}</span>
+                    <span className="">{ins.start_date?.split('T')[0] || '-'}</span>
                   </div>
                   <div>
                     <span className="text-gray-500">到期: </span>

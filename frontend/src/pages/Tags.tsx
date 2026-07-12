@@ -1,14 +1,20 @@
-import { useState } from 'react'
+import { useState, FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { tagApi } from '../services/api'
+import { tagApi, Tag } from '../services/api'
 import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
+
+// Form state type
+interface TagForm {
+  name: string
+  color: string
+}
 
 const defaultColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BDC3C7', '#E74C3C']
 
 export default function Tags() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', color: defaultColors[0] })
+  const [form, setForm] = useState<TagForm>({ name: '', color: defaultColors[0] })
   const queryClient = useQueryClient()
 
   const { data } = useQuery({
@@ -17,7 +23,7 @@ export default function Tags() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => tagApi.create(data),
+    mutationFn: (data: TagForm) => tagApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tags'] })
       closeModal()
@@ -25,7 +31,7 @@ export default function Tags() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => tagApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<TagForm> }) => tagApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tags'] })
       closeModal()
@@ -37,9 +43,9 @@ export default function Tags() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tags'] }),
   })
 
-  const tags = data?.data?.data || []
+  const tags = data?.data.data || []
 
-  const openModal = (tag?: any) => {
+  const openModal = (tag?: Tag) => {
     if (tag) {
       setEditingId(tag.id)
       setForm({ name: tag.name, color: tag.color || defaultColors[0] })
@@ -56,7 +62,7 @@ export default function Tags() {
     setForm({ name: '', color: defaultColors[0] })
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: form })
@@ -76,7 +82,7 @@ export default function Tags() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        {tags.map((tag: any) => (
+        {tags.map((tag: Tag) => (
           <div
             key={tag.id}
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200"

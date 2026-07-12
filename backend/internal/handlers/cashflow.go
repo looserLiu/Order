@@ -3,29 +3,30 @@ package handlers
 import (
 	"strconv"
 	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
-	"github.com/ledger/backend/internal/models"
+
+	"github.com/ledger/backend/internal/service"
 	"github.com/ledger/backend/pkg/response"
 )
 
 type CashFlowHandler struct {
-	db *gorm.DB
+	cashFlowService *service.CashFlowService
 }
 
-func NewCashFlowHandler(db *gorm.DB) *CashFlowHandler {
-	return &CashFlowHandler{db: db}
+func NewCashFlowHandler(cashFlowService *service.CashFlowService) *CashFlowHandler {
+	return &CashFlowHandler{cashFlowService: cashFlowService}
 }
 
 func (h *CashFlowHandler) GetProjection(c *gin.Context) {
-	userID := c.GetString("user_id")
-	if userID == "" {
+	userID := middleware.GetUserID(c)
+	if userID == uuid.Nil {
 		response.Error(c, 401, "Unauthorized")
 		return
 	}
 
-	uid, _ := uuid.Parse(userID)
+	uid := userID
 
 	// Get days parameter (default 30)
 	days := 30
@@ -35,55 +36,22 @@ func (h *CashFlowHandler) GetProjection(c *gin.Context) {
 		}
 	}
 
-	// Get current total balance
-	var totalBalance float64
-	if err := h.db.Model(&models.Account{}).Where("user_id = ?", uid).Select("COALESCE(SUM(balance), 0)").Scan(&totalBalance).Error; err != nil {
-		response.Error(c, 500, "Failed to get balance")
+	result, err := h.cashFlowService.GetProjection(c.Request.Context(), uid, days)
+	if err != nil {
+		response.Error(c, 500, "Failed to get projection")
 		return
-	}
-
-	// Get recurring transactions
-	var recurringTxs []models.Transaction
-	if err := h.db.Where("user_id = ? AND is_recurring = ?", uid, true).Find(&recurringTxs).Error; err != nil {
-		response.Error(c, 500, "Failed to get recurring transactions")
-		return
-	}
-
-	// Calculate projections
-	projections := make([]CashFlowProjection, days)
-	currentBalance := totalBalance
-
-	for i := 0; i < days; i++ {
-		date := time.Now().AddDate(0, 0, i)
-		dateStr := date.Format("2006-01-02")
-
-		dayIncome := 0.0
-		dayExpense := 0.0
-		recurringCount := 0
-
-		for _, tx := range recurringTxs {
-			if tx.BillDate.Day() == date.Day() || shouldRecurToday(&tx.BillDate, date) {
-				if tx.Type == "income" {
-					dayIncome += tx.Amount
-				} else if tx.Type == "expense" {
-					dayExpense += tx.Amount
-				}
-				recurringCount++
-			}
-		}
-
-		currentBalance = currentBalance + dayIncome - dayExpense
-		projections[i] = CashFlowProjection{
-			Date:          dateStr,
-			ProjectedBal:  currentBalance,
-			Income:        dayIncome,
-			Expense:       dayExpense,
-			RecurringTx:   recurringCount,
-		}
 	}
 
 	response.Success(c, gin.H{
-		"current_balance": totalBalance,
-		"projections":     projections,
+		"current_balance": result.CurrentBalance,
+		"projections":     result.Projections,
 	})
+}
+
+// shouldRecurToday checks if a transaction should recur on the given date
+func shouldRecurToday(lastDate *time.Time, today time.Time) bool {
+	if lastDate == nil {
+		return false
+	}
+	return today.After(*lastDate) && today.Day() == lastDate.Day()
 }

@@ -1,9 +1,10 @@
-import { useState } from 'react'
-import { csvApi } from '../services/api'
+import { useState, ChangeEvent } from 'react'
+import { csvApi, ImportResult } from '../services/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowUpTrayIcon, DocumentIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
 
-interface ParseResult {
+// Parse result type
+export interface ParseResult {
   date: string
   type: string
   amount: string
@@ -15,11 +16,22 @@ interface ParseResult {
   error?: string
 }
 
+// CSV row type for import
+interface CSVRow {
+  date: string
+  type: string
+  amount: string
+  category: string
+  account: string
+  merchant: string
+  note: string
+}
+
 export default function CSVImport() {
   const [file, setFile] = useState<File | null>(null)
   const [parsedData, setParsedData] = useState<ParseResult[]>([])
   const [importing, setImporting] = useState(false)
-  const [result, setResult] = useState<{ imported: number; failed: number } | null>(null)
+  const [result, setResult] = useState<ImportResult | null>(null)
   const queryClient = useQueryClient()
 
   const parseCSV = (content: string): ParseResult[] => {
@@ -64,7 +76,7 @@ export default function CSVImport() {
     return results
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (!selectedFile) return
 
@@ -85,7 +97,7 @@ export default function CSVImport() {
 
     setImporting(true)
     try {
-      const validData = parsedData
+      const validData: CSVRow[] = parsedData
         .filter(d => d.valid)
         .map(d => ({
           date: d.date,
@@ -98,7 +110,7 @@ export default function CSVImport() {
         }))
 
       const { data } = await csvApi.importCSV({ transactions: validData })
-      setResult(data.data.data)
+      setResult(data.data)
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
     } catch (error) {

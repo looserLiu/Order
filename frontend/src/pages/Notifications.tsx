@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { notificationApi } from '../services/api'
+import { notificationApi, Notification } from '../services/api'
 import { BellIcon, CheckIcon, TrashIcon } from '@heroicons/react/24/outline'
+
+// Notification list response type
+interface NotificationListResponse {
+  list: Notification[]
+  unread_count: number
+}
 
 export default function Notifications() {
   const [showUnreadOnly, setShowUnreadOnly] = useState(false)
@@ -27,8 +33,9 @@ export default function Notifications() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   })
 
-  const notifications = data?.data?.data?.list || []
-  const unreadCount = data?.data?.data?.unread_count || 0
+  const responseData = data?.data?.data as unknown as NotificationListResponse
+  const notifications = responseData?.list || []
+  const unreadCount = responseData?.unread_count || 0
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -87,13 +94,13 @@ export default function Notifications() {
       </div>
 
       <div className="space-y-2">
-        {notifications.map((notification: any) => (
+        {notifications.map((notification: Notification) => (
           <div
             key={notification.id}
             className={`card flex items-start gap-3 ${!notification.is_read ? 'bg-primary-50' : ''}`}
           >
-            <div className={`px-2 py-1 rounded text-xs ${getTypeColor(notification.type)}`}>
-              {notification.type === 'budget_alert' ? '预算提醒' : 
+            <div className={`px-2 py-1 rounded text-xs ${getTypeColor(notification.type || 'default')}`}>
+              {notification.type === 'budget_alert' ? '预算提醒' :
                notification.type === 'reminder' ? '定时提醒' : '系统通知'}
             </div>
             <div className="flex-1 min-w-0">

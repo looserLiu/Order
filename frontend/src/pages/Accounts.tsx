@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useState, FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { accountApi } from '../services/api'
+import { accountApi, Account } from '../services/api'
 import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { LoadingSpinner } from '../components/LoadingSpinner'
 
+// Account type options
 const accountTypes = [
   { value: 'cash', label: '现金', color: '#27AE60' },
   { value: 'bank', label: '银行卡', color: '#3498DB' },
@@ -12,10 +14,18 @@ const accountTypes = [
   { value: 'investment', label: '投资', color: '#9B59B6' },
 ]
 
+// Form state type
+interface AccountForm {
+  name: string
+  type: string
+  balance: number
+  color: string
+}
+
 export default function Accounts() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', type: 'cash', balance: 0, color: '' })
+  const [form, setForm] = useState<AccountForm>({ name: '', type: 'cash', balance: 0, color: '' })
   const queryClient = useQueryClient()
 
   const { data } = useQuery({
@@ -24,7 +34,7 @@ export default function Accounts() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => accountApi.create(data),
+    mutationFn: (data: AccountForm) => accountApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       closeModal()
@@ -32,7 +42,7 @@ export default function Accounts() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => accountApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<AccountForm> }) => accountApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       closeModal()
@@ -44,9 +54,9 @@ export default function Accounts() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounts'] }),
   })
 
-  const accounts = data?.data?.data || []
+  const accounts = data?.data.data || []
 
-  const openModal = (account?: any) => {
+  const openModal = (account?: Account) => {
     if (account) {
       setEditingId(account.id)
       setForm({ name: account.name, type: account.type, balance: account.balance, color: account.color || '' })
@@ -63,7 +73,7 @@ export default function Accounts() {
     setForm({ name: '', type: 'cash', balance: 0, color: '' })
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: form })
@@ -72,7 +82,7 @@ export default function Accounts() {
     }
   }
 
-  const total = accounts.reduce((sum: number, acc: any) => sum + (acc.balance || 0), 0)
+  const total = accounts.reduce((sum: number, acc: Account) => sum + (acc.balance || 0), 0)
 
   return (
     <div className="space-y-6">
@@ -88,7 +98,7 @@ export default function Accounts() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {accounts.map((account: any) => {
+        {accounts.map((account: Account) => {
           const typeInfo = accountTypes.find(t => t.value === account.type) || accountTypes[0]
           return (
             <div key={account.id} className="card">

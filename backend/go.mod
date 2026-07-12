@@ -9,6 +9,7 @@ require (
 	golang.org/x/crypto v0.18.0
 	gorm.io/driver/postgres v1.5.4
 	gorm.io/gorm v1.25.5
+	github.com/stretchr/testify v1.8.4
 )
 
 require (

@@ -1,10 +1,17 @@
-import { useState } from 'react'
+import { useState, FormEvent, ChangeEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { userApi, authApi, backupApi } from '../services/api'
+import { userApi, backupApi, User } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import { useTranslation } from 'react-i18next'
 import ThemeSelector from '../components/ThemeSelector'
 import { LanguageIcon } from '@heroicons/react/24/outline'
+
+// Form state type
+interface SettingsForm {
+  nickname: string
+  currency: string
+  timezone: string
+}
 
 export default function Settings() {
   const { user, logout } = useAuthStore()
@@ -21,7 +28,7 @@ export default function Settings() {
   }
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<SettingsForm>({
     nickname: user?.nickname || '',
     currency: user?.currency || 'CNY',
     timezone: 'Asia/Shanghai',
@@ -33,16 +40,16 @@ export default function Settings() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: (data: any) => userApi.updateMe(data),
+    mutationFn: (data: SettingsForm) => userApi.updateMe(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user'] })
       setEditing(false)
     },
   })
 
-  const currentUser = data?.data?.data || user
+  const currentUser = data?.data.data || user
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     updateMutation.mutate(form)
   }
@@ -70,7 +77,7 @@ export default function Settings() {
   })
 
   const importMutation = useMutation({
-    mutationFn: (data: any) => backupApi.importAll(data),
+    mutationFn: (data: unknown) => backupApi.importAll(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
@@ -93,7 +100,7 @@ export default function Settings() {
     }
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       const reader = new FileReader()

@@ -1,15 +1,50 @@
-import { useState } from 'react'
+import { useState, FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { familyApi, accountApi, categoryApi } from '../services/api'
+import { familyApi, accountApi, categoryApi, Account, Category, Transaction } from '../services/api'
 import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, ArrowRightIcon } from '@heroicons/react/24/outline'
+
+// Form state types
+interface FamilyForm {
+  name: string
+}
+
+interface MemberForm {
+  email: string
+  role: string
+}
+
+interface TransactionForm {
+  account_id: string
+  category_id: string
+  type: string
+  amount: number
+  note: string
+  bill_date: string
+}
+
+// Family type for API response
+interface Family {
+  id: string
+  name: string
+  members?: FamilyMember[]
+}
+
+interface FamilyMember {
+  id: string
+  user?: {
+    email?: { nickname?: string }
+    name?: string
+  }
+  role: string
+}
 
 export default function Families() {
   const [showModal, setShowModal] = useState(false)
   const [showAddMember, setShowAddMember] = useState<string | null>(null)
   const [showTxModal, setShowTxModal] = useState<string | null>(null)
-  const [familyForm, setFamilyForm] = useState({ name: '' })
-  const [memberForm, setMemberForm] = useState({ email: '', role: 'member' })
-  const [txForm, setTxForm] = useState({
+  const [familyForm, setFamilyForm] = useState<FamilyForm>({ name: '' })
+  const [memberForm, setMemberForm] = useState<MemberForm>({ email: '', role: 'member' })
+  const [txForm, setTxForm] = useState<TransactionForm>({
     account_id: '',
     category_id: '',
     type: 'expense',
@@ -41,7 +76,7 @@ export default function Families() {
   })
 
   const createFamilyMutation = useMutation({
-    mutationFn: (data: any) => familyApi.create(data),
+    mutationFn: (data: FamilyForm) => familyApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['families'] })
       closeModal()
@@ -54,7 +89,7 @@ export default function Families() {
   })
 
   const addMemberMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => familyApi.addMember(id, data),
+    mutationFn: ({ id, data }: { id: string; data: MemberForm }) => familyApi.addMember(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['families'] })
       setShowAddMember(null)
@@ -67,34 +102,34 @@ export default function Families() {
   })
 
   const createTxMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => familyApi.createTransaction(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => familyApi.createTransaction(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['family-tx'] })
       setShowTxModal(null)
     },
   })
 
-  const families = data?.data?.data || []
-  const accounts = accountsData?.data?.data || []
-  const categories = categoriesData?.data?.data || []
-  const transactions = txData?.data?.data || []
+  const families = (data?.data.data || []) as Family[]
+  const accounts = (accountsData?.data.data || []) as Account[]
+  const categories = (categoriesData?.data.data || []) as Category[]
+  const transactions = (txData?.data.data || []) as Transaction[]
 
   const closeModal = () => {
     setShowModal(false)
     setFamilyForm({ name: '' })
   }
 
-  const handleCreateFamily = (e: React.FormEvent) => {
+  const handleCreateFamily = (e: FormEvent) => {
     e.preventDefault()
     createFamilyMutation.mutate(familyForm)
   }
 
-  const handleAddMember = (e: React.FormEvent, familyId: string) => {
+  const handleAddMember = (e: FormEvent, familyId: string) => {
     e.preventDefault()
     addMemberMutation.mutate({ id: familyId, data: memberForm })
   }
 
-  const handleCreateTx = (e: React.FormEvent, familyId: string) => {
+  const handleCreateTx = (e: FormEvent, familyId: string) => {
     e.preventDefault()
     createTxMutation.mutate({
       id: familyId,
@@ -118,7 +153,7 @@ export default function Families() {
       </div>
 
       <div className="grid gap-4">
-        {families.map((family: any) => (
+        {families.map((family: Family) => (
           <div key={family.id} className="card">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -148,7 +183,7 @@ export default function Families() {
                 </button>
               </div>
               <div className="flex flex-wrap gap-2">
-                {family.members?.map((member: any) => (
+                {family.members?.map((member: FamilyMember) => (
                   <div
                     key={member.id}
                     className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full text-sm"
@@ -292,7 +327,7 @@ export default function Families() {
                 className="input"
               >
                 <option value="">选择账户</option>
-                {accounts.map((acc: any) => (
+                {accounts.map((acc: Account) => (
                   <option key={acc.id} value={acc.id}>{acc.name}</option>
                 ))}
               </select>
@@ -307,11 +342,11 @@ export default function Families() {
             </form>
 
             <div className="space-y-2">
-              {transactions.map((tx: any) => (
+              {transactions.map((tx: Transaction) => (
                 <div key={tx.id} className="flex items-center justify-between py-2 border-b border-gray-100">
                   <div>
                     <p className="font-medium">{tx.category?.name || '未分类'}</p>
-                    <p className="text-xs text-gray-500">{tx.user?.nickname} · {tx.bill_date}</p>
+                    <p className="text-xs text-gray-500">{tx.bill_date}</p>
                   </div>
                   <p className={`font-semibold ${tx.type === 'income' ? 'text-green-600' : 'text-red-500'}`}>
                     {tx.type === 'income' ? '+' : '-'}¥{tx.amount?.toFixed(2)}

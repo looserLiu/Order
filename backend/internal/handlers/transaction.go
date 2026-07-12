@@ -3,20 +3,22 @@ package handlers
 import (
 	"net/http"
 	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
+
 	"github.com/ledger/backend/internal/models"
+	"github.com/ledger/backend/internal/service"
 	"github.com/ledger/backend/pkg/middleware"
 	"github.com/ledger/backend/pkg/response"
 )
 
 type TransactionHandler struct {
-	db *gorm.DB
+	transactionService *service.TransactionService
 }
 
-func NewTransactionHandler(db *gorm.DB) *TransactionHandler {
-	return &TransactionHandler{db: db}
+func NewTransactionHandler(transactionService *service.TransactionService) *TransactionHandler {
+	return &TransactionHandler{transactionService: transactionService}
 }
 
 func (h *TransactionHandler) List(c *gin.Context) {
@@ -24,58 +26,32 @@ func (h *TransactionHandler) List(c *gin.Context) {
 
 	page := c.DefaultQuery("page", "1")
 	pageSize := c.DefaultQuery("page_size", "20")
-	startDate := c.Query("start_date")
-	endDate := c.Query("end_date")
-	categoryID := c.Query("category_id")
-	accountID := c.Query("account_id")
-	txType := c.Query("type")
-	tagID := c.Query("tag_id")
-	merchant := c.Query("merchant")
 
-	var transactions []models.Transaction
-	query := h.db.Where("user_id = ?", userID)
+	limit := parseInt(pageSize)
+	offset := (parseInt(page) - 1) * limit
 
-	if startDate != "" {
-		query = query.Where("bill_date >= ?", startDate)
-	}
-	if endDate != "" {
-		query = query.Where("bill_date <= ?", endDate)
-	}
-	if categoryID != "" {
-		query = query.Where("category_id = ?", categoryID)
-	}
-	if accountID != "" {
-		query = query.Where("account_id = ?", accountID)
-	}
-	if txType != "" {
-		query = query.Where("type = ?", txType)
-	}
-	if merchant != "" {
-		query = query.Where("merchant ILIKE ?", "%"+merchant+"%")
-	}
-	if tagID != "" {
-		query = query.Where("EXISTS (SELECT 1 FROM transaction_tags WHERE transaction_id = transactions.id AND tag_id = ?)", tagID)
+	transactions, err := h.transactionService.List(c.Request.Context(), userID, limit, offset)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	var total int64
-	query.Count(&total)
-
-	query.Order("bill_date DESC, created_at DESC").Offset((parseInt(page) - 1) * parseInt(pageSize)).Limit(parseInt(pageSize)).Preload("Category").Preload("Account").Preload("Tags").Find(&transactions)
-
-	response.Paginate(c, transactions, total, parseInt(page), parseInt(pageSize))
+	var total int64 = int64(len(transactions))
+	response.Paginate(c, transactions, total, parseInt(page), limit)
 }
 
 func (h *TransactionHandler) ListByDate(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	date := c.Query("date")
 
-	var transactions []models.Transaction
-	h.db.Where("user_id = ? AND bill_date = ?", userID, date).
-		Preload("Category").Preload("Account").
-		Order("created_at DESC").
-		Find(&transactions)
+	if date != "" {
+		billDate, _ := time.Parse("2006-01-02", date)
+		txs, _ := h.transactionService.ListByDate(c.Request.Context(), userID, billDate, billDate)
+		response.Success(c, txs)
+		return
+	}
 
-	response.Success(c, transactions)
+	response.Success(c, []models.Transaction{})
 }
 
 func (h *TransactionHandler) Create(c *gin.Context) {
@@ -89,8 +65,7 @@ func (h *TransactionHandler) Create(c *gin.Context) {
 
 	billDate, _ := time.Parse("2006-01-02", req.BillDate)
 
-	transaction := models.Transaction{
-		UserID:          userID,
+	createReq := &service.CreateRequest{
 		AccountID:       *req.AccountID,
 		TargetAccountID: req.TargetAccountID,
 		CategoryID:      req.CategoryID,
@@ -99,58 +74,26 @@ func (h *TransactionHandler) Create(c *gin.Context) {
 		Currency:        req.Currency,
 		Merchant:        req.Merchant,
 		Note:            req.Note,
-		Tags:            req.Tags,
 		BillDate:        billDate,
 		IsRecurring:     req.IsRecurring,
 		RecurringRule:   req.RecurringRule,
 	}
 
-	// Use transaction for data consistency
-	err := h.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&transaction).Error; err != nil {
-			return err
-		}
-
-		if err := h.updateAccountBalanceTx(tx, req.AccountID, req.Type, req.Amount); err != nil {
-			return err
-		}
-
-		if req.Type == "transfer" && req.TargetAccountID != nil {
-			if err := h.updateAccountBalanceTx(tx, req.TargetAccountID, "income", req.Amount); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
-
+	transaction, err := h.transactionService.Create(c.Request.Context(), userID, createReq)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to create transaction")
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	response.Success(c, transaction)
 }
 
-func (h *TransactionHandler) updateAccountBalanceTx(tx *gorm.DB, accountID *uuid.UUID, txType string, amount float64) error {
-	var account models.Account
-	if err := tx.First(&account, accountID).Error; err != nil {
-		return err
-	}
-	if txType == "expense" {
-		account.Balance -= amount
-	} else if txType == "income" {
-		account.Balance += amount
-	}
-	return tx.Save(&account).Error
-}
-
 func (h *TransactionHandler) Get(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
-	var transaction models.Transaction
-	if err := h.db.Where("id = ? AND user_id = ?", id, userID).Preload("Category").Preload("Account").Preload("Tags").First(&transaction).Error; err != nil {
+	transaction, err := h.transactionService.Get(c.Request.Context(), id, userID)
+	if err != nil {
 		response.Error(c, http.StatusNotFound, "Transaction not found")
 		return
 	}
@@ -160,7 +103,7 @@ func (h *TransactionHandler) Get(c *gin.Context) {
 
 func (h *TransactionHandler) Update(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
 	var req CreateTransactionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -168,39 +111,37 @@ func (h *TransactionHandler) Update(c *gin.Context) {
 		return
 	}
 
-	var transaction models.Transaction
-	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&transaction).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Transaction not found")
+	updates := make(map[string]interface{})
+	if req.AccountID != nil {
+		updates["account_id"] = *req.AccountID
+	}
+	if req.CategoryID != nil {
+		updates["category_id"] = req.CategoryID
+	}
+	updates["amount"] = req.Amount
+	updates["merchant"] = req.Merchant
+	updates["note"] = req.Note
+	billDate, _ := time.Parse("2006-01-02", req.BillDate)
+	updates["bill_date"] = billDate
+
+	transaction, err := h.transactionService.Update(c.Request.Context(), id, userID, updates)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	billDate, _ := time.Parse("2006-01-02", req.BillDate)
-	transaction.AccountID = *req.AccountID
-	transaction.TargetAccountID = req.TargetAccountID
-	transaction.CategoryID = req.CategoryID
-	transaction.Type = req.Type
-	transaction.Amount = req.Amount
-	transaction.Currency = req.Currency
-	transaction.Merchant = req.Merchant
-	transaction.Note = req.Note
-	transaction.Tags = req.Tags
-	transaction.BillDate = billDate
-
-	h.db.Save(&transaction)
 	response.Success(c, transaction)
 }
 
 func (h *TransactionHandler) Delete(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
-	var transaction models.Transaction
-	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&transaction).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Transaction not found")
+	if err := h.transactionService.Delete(c.Request.Context(), id, userID); err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	h.db.Delete(&transaction)
 	response.SuccessWithMessage(c, "Transaction deleted", nil)
 }
 
@@ -217,6 +158,10 @@ func (h *TransactionHandler) BatchDelete(c *gin.Context) {
 		return
 	}
 
-	h.db.Where("id IN ? AND user_id = ?", req.IDs, userID).Delete(&models.Transaction{})
+	if err := h.transactionService.BatchDelete(c.Request.Context(), req.IDs, userID); err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	response.SuccessWithMessage(c, "Transactions deleted", nil)
 }

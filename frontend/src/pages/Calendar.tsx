@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { transactionApi, reportApi } from '../services/api'
-import { 
-  format, 
-  startOfMonth, 
-  endOfMonth, 
-  eachDayOfInterval, 
-  isSameDay, 
+import { transactionApi, reportApi, Transaction } from '../services/api'
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isSameDay,
   isSameMonth,
   addMonths,
   subMonths,
@@ -15,6 +15,14 @@ import {
 } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+
+// Paginated response type
+interface TransactionListResponse {
+  list: Transaction[]
+  total: number
+  page: number
+  page_size: number
+}
 
 export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -32,18 +40,18 @@ export default function Calendar() {
     queryFn: () => transactionApi.list({ start_date: monthStart, end_date: monthEnd }),
   })
 
-  const transactions = txData?.data?.data?.list || []
+  const transactions = ((txData?.data?.data as unknown as TransactionListResponse)?.list || []) as Transaction[]
 
   const getDayData = (day: Date) => {
     const dateStr = format(day, 'yyyy-MM-dd')
-    const dayTx = transactions.filter((t: any) => t.bill_date === dateStr)
-    const income = dayTx.filter((t: any) => t.type === 'income').reduce((sum: number, t: any) => sum + t.amount, 0)
-    const expense = dayTx.filter((t: any) => t.type === 'expense').reduce((sum: number, t: any) => sum + t.amount, 0)
+    const dayTx = transactions.filter((t) => t.bill_date === dateStr)
+    const income = dayTx.filter((t) => t.type === 'income').reduce((sum: number, t) => sum + t.amount, 0)
+    const expense = dayTx.filter((t) => t.type === 'expense').reduce((sum: number, t) => sum + t.amount, 0)
     return { income, expense, count: dayTx.length }
   }
 
-  const selectedDateTx = selectedDate 
-    ? transactions.filter((t: any) => t.bill_date === selectedDate)
+  const selectedDateTx = selectedDate
+    ? transactions.filter((t) => t.bill_date === selectedDate)
     : []
 
   return (
@@ -117,7 +125,7 @@ export default function Calendar() {
         <div className="card">
           <h3 className="font-semibold mb-4">{selectedDate} 记账明细</h3>
           <div className="space-y-2">
-            {selectedDateTx.map((tx: any) => (
+            {selectedDateTx.map((tx: Transaction) => (
               <div key={tx.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                 <div>
                   <p className="font-medium">{tx.category?.name || '未分类'}</p>

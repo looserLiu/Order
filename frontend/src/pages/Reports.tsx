@@ -1,9 +1,33 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { reportApi, accountApi } from '../services/api'
+import { reportApi } from '../services/api'
 import { PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, LineChart, Line, Legend } from 'recharts'
 
 const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#F8B500', '#00D4AA']
+
+// Report data types
+interface CategoryReportItem {
+  category_name: string
+  total: number
+}
+
+interface AccountReportItem {
+  account_name: string
+  income: number
+  expense: number
+}
+
+interface MerchantReportItem {
+  merchant: string
+  total: number
+  percentage: number
+}
+
+interface MonthlyReportItem {
+  month: string
+  income: number
+  expense: number
+}
 
 export default function Reports() {
   const [period, setPeriod] = useState('month')
@@ -62,16 +86,16 @@ export default function Reports() {
     queryFn: () => reportApi.monthlyCompare(),
   })
 
-  const summaryData = summary?.data?.data
-  const trendData = trend?.data?.data || []
-  const expenseData = expenseCategory?.data?.data || []
-  const incomeData = incomeCategory?.data?.data || []
-  const accountReportData = accountData?.data?.data || []
-  const merchantReportData = merchantData?.data?.data || []
-  const monthlyData = monthly?.data?.data || []
+  const summaryData = summary?.data.data
+  const trendData = trend?.data.data || []
+  const expenseData = expenseCategory?.data.data as CategoryReportItem[] || []
+  const incomeData = incomeCategory?.data.data as CategoryReportItem[] || []
+  const accountReportData = accountData?.data.data as AccountReportItem[] || []
+  const merchantReportData = merchantData?.data.data as MerchantReportItem[] || []
+  const monthlyData = monthly?.data.data as MonthlyReportItem[] || []
 
-  const totalExpense = expenseData.reduce((sum: number, item: any) => sum + item.total, 0)
-  const totalIncome = incomeData.reduce((sum: number, item: any) => sum + item.total, 0)
+  const totalExpense = expenseData.reduce((sum: number, item: CategoryReportItem) => sum + item.total, 0)
+  const totalIncome = incomeData.reduce((sum: number, item: CategoryReportItem) => sum + item.total, 0)
 
   const renderOverview = () => (
     <>
@@ -117,7 +141,7 @@ export default function Reports() {
                 dataKey="total"
                 label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
               >
-                {expenseData.map((_: any, index: number) => (
+                {expenseData.map((_: CategoryReportItem, index: number) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -139,7 +163,7 @@ export default function Reports() {
             </tr>
           </thead>
           <tbody>
-            {expenseData.map((item: any, index: number) => (
+            {expenseData.map((item: CategoryReportItem, index: number) => (
               <tr key={item.category_name} className="border-b border-gray-100">
                 <td className="py-3">
                   <div className="flex items-center gap-2">
@@ -176,7 +200,7 @@ export default function Reports() {
               dataKey="total"
               label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
             >
-              {incomeData.map((_: any, index: number) => (
+              {incomeData.map((_: CategoryReportItem, index: number) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Pie>
@@ -196,7 +220,7 @@ export default function Reports() {
             </tr>
           </thead>
           <tbody>
-            {incomeData.map((item: any, index: number) => (
+            {incomeData.map((item: CategoryReportItem, index: number) => (
               <tr key={item.category_name} className="border-b border-gray-100">
                 <td className="py-3">
                   <div className="flex items-center gap-2">
@@ -243,7 +267,7 @@ export default function Reports() {
           </tr>
         </thead>
         <tbody>
-          {merchantReportData.slice(0, 10).map((item: any, index: number) => (
+          {merchantReportData.slice(0, 10).map((item: MerchantReportItem, index: number) => (
             <tr key={item.merchant} className="border-b border-gray-100">
               <td className="py-3">
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -293,7 +317,7 @@ export default function Reports() {
             </tr>
           </thead>
           <tbody>
-            {monthlyData.map((item: any) => (
+            {monthlyData.map((item: MonthlyReportItem) => (
               <tr key={item.month} className="border-b border-gray-100">
                 <td className="py-3">{item.month}</td>
                 <td className="py-3 text-right text-green-600">¥{item.income?.toFixed(2)}</td>

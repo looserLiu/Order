@@ -1,23 +1,36 @@
-import { useState } from 'react'
+import { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
-import { authApi } from '../services/api'
+import { authApi, User } from '../services/api'
+
+// Form state type
+interface LoginForm {
+  email: string
+  password: string
+  nickname: string
+}
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [nickname, setNickname] = useState('')
+  const [form, setForm] = useState<LoginForm>({
+    email: '',
+    password: '',
+    nickname: '',
+  })
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const setAuth = useAuthStore((state) => state.setAuth)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setLoading(true)
     try {
       const api = isLogin ? authApi.login : authApi.register
-      const { data } = await api({ email, password, nickname: nickname || undefined })
+      const { data } = await api({ 
+        email: form.email, 
+        password: form.password, 
+        nickname: form.nickname || undefined 
+      })
       setAuth(data.data.token, data.data.user)
       navigate('/')
     } catch (error) {
@@ -39,8 +52,8 @@ export default function Login() {
               <label className="block text-sm font-medium text-gray-700 mb-1">昵称</label>
               <input
                 type="text"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
+                value={form.nickname}
+                onChange={(e) => setForm({ ...form, nickname: e.target.value })}
                 className="input"
                 placeholder="请输入昵称"
               />
@@ -50,8 +63,8 @@ export default function Login() {
             <label className="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
             <input
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="input"
               placeholder="请输入邮箱"
               required
@@ -61,8 +74,8 @@ export default function Login() {
             <label className="block text-sm font-medium text-gray-700 mb-1">密码</label>
             <input
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
               className="input"
               placeholder="请输入密码"
               required

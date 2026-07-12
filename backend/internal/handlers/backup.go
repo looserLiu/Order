@@ -2,26 +2,30 @@ package handlers
 
 import (
 	"net/http"
-	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
 	"github.com/ledger/backend/internal/models"
+	"github.com/ledger/backend/internal/service"
 	"github.com/ledger/backend/pkg/middleware"
 	"github.com/ledger/backend/pkg/response"
 )
 
 type BackupHandler struct {
-	db *gorm.DB
+	backupService *service.BackupService
+	db            *gorm.DB
 }
 
-func NewBackupHandler(db *gorm.DB) *BackupHandler {
-	return &BackupHandler{db: db}
+func NewBackupHandler(backupService *service.BackupService, db *gorm.DB) *BackupHandler {
+	return &BackupHandler{backupService: backupService, db: db}
 }
 
 func (h *BackupHandler) ExportAll(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
+	// For export, we need to query multiple tables
 	var accounts []models.Account
 	h.db.Where("user_id = ?", userID).Find(&accounts)
 
@@ -51,11 +55,11 @@ func (h *BackupHandler) ExportAll(c *gin.Context) {
 
 	response.Success(c, gin.H{
 		"version":       "1.0",
-		"exported_at":   time.Now().Format("2006-01-02 15:04:05"),
+		"exported_at":   "now",
 		"accounts":      accounts,
 		"categories":    categories,
 		"transactions":  transactions,
-		"budgets":      budgets,
+		"budgets":       budgets,
 		"tags":          tags,
 		"reminders":     reminders,
 		"goals":         goals,
@@ -69,14 +73,14 @@ func (h *BackupHandler) ImportAll(c *gin.Context) {
 
 	var req struct {
 		Accounts      []models.Account      `json:"accounts"`
-		Categories    []models.Category      `json:"categories"`
-		Transactions  []models.Transaction   `json:"transactions"`
-		Budgets       []models.Budget        `json:"budgets"`
-		Tags           []models.Tag           `json:"tags"`
-		Reminders     []models.Reminder      `json:"reminders"`
+		Categories    []models.Category     `json:"categories"`
+		Transactions  []models.Transaction  `json:"transactions"`
+		Budgets       []models.Budget       `json:"budgets"`
+		Tags          []models.Tag          `json:"tags"`
+		Reminders     []models.Reminder     `json:"reminders"`
 		Goals         []models.FinancialGoal `json:"goals"`
-		Insurances    []models.Insurance     `json:"insurances"`
-		AssetChanges  []models.AssetChange   `json:"asset_changes"`
+		Insurances    []models.Insurance    `json:"insurances"`
+		AssetChanges  []models.AssetChange  `json:"asset_changes"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -84,7 +88,7 @@ func (h *BackupHandler) ImportAll(c *gin.Context) {
 		return
 	}
 
-	imported := map[string]int{}
+	imported := make(map[string]int)
 
 	if req.Accounts != nil {
 		for i := range req.Accounts {
@@ -167,13 +171,6 @@ func (h *BackupHandler) ImportAll(c *gin.Context) {
 		imported["asset_changes"] = len(req.AssetChanges)
 	}
 
-	backup := models.Backup{
-		UserID:     userID,
-		BackupType: "manual",
-		FileName:   "import_" + time.Now().Format("20060102150405"),
-	}
-	h.db.Create(&backup)
-
 	response.Success(c, gin.H{
 		"message":  "Import completed",
 		"imported": imported,
@@ -183,8 +180,11 @@ func (h *BackupHandler) ImportAll(c *gin.Context) {
 func (h *BackupHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	var backups []models.Backup
-	h.db.Where("user_id = ?", userID).Order("created_at DESC").Find(&backups)
+	backups, err := h.backupService.List(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	response.Success(c, backups)
 }

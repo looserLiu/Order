@@ -1,14 +1,21 @@
-import { useState } from 'react'
+import { useState, FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { categoryApi } from '../services/api'
+import { categoryApi, Category } from '../services/api'
 import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
+
+// Form state type
+interface CategoryForm {
+  name: string
+  type: string
+  color: string
+}
 
 const defaultColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F']
 
 export default function Categories() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ name: '', type: 'expense', color: defaultColors[0] })
+  const [form, setForm] = useState<CategoryForm>({ name: '', type: 'expense', color: defaultColors[0] })
   const [filterType, setFilterType] = useState('expense')
   const queryClient = useQueryClient()
 
@@ -18,7 +25,7 @@ export default function Categories() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => categoryApi.create(data),
+    mutationFn: (data: CategoryForm) => categoryApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] })
       closeModal()
@@ -26,7 +33,7 @@ export default function Categories() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => categoryApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<CategoryForm> }) => categoryApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] })
       closeModal()
@@ -38,10 +45,10 @@ export default function Categories() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
   })
 
-  const categories = data?.data?.data || []
-  const filteredCategories = categories.filter((c: any) => c.type === filterType)
+  const categories = data?.data.data || []
+  const filteredCategories = categories.filter((c: Category) => c.type === filterType)
 
-  const openModal = (cat?: any) => {
+  const openModal = (cat?: Category) => {
     if (cat) {
       setEditingId(cat.id)
       setForm({ name: cat.name, type: cat.type, color: cat.color || defaultColors[0] })
@@ -58,7 +65,7 @@ export default function Categories() {
     setForm({ name: '', type: 'expense', color: defaultColors[0] })
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: form })
@@ -94,7 +101,7 @@ export default function Categories() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        {filteredCategories.map((cat: any) => (
+        {filteredCategories.map((cat: Category) => (
           <div key={cat.id} className="card">
             <div className="flex items-center gap-3">
               <div

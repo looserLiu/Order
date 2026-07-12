@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { transactionApi, accountApi, categoryApi } from '../services/api'
+import { transactionApi, accountApi, categoryApi, Account, Category, Transaction } from '../services/api'
 import { PlusIcon, PencilIcon, TrashIcon, ClockIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 
 const recurringOptions = [
@@ -10,9 +10,31 @@ const recurringOptions = [
   { value: 'yearly', label: '每年' },
 ]
 
+// Form state type
+interface RecurringForm {
+  type: string
+  account_id: string
+  category_id: string
+  amount: number
+  merchant: string
+  note: string
+  bill_date: string
+  is_recurring: boolean
+  recurring_rule: string
+  next_date: string
+}
+
+// Paginated response type
+interface TransactionListResponse {
+  list: Transaction[]
+  total: number
+  page: number
+  page_size: number
+}
+
 export default function RecurringTransactions() {
   const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<RecurringForm>({
     type: 'expense',
     account_id: '',
     category_id: '',
@@ -42,7 +64,7 @@ export default function RecurringTransactions() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => transactionApi.create(data),
+    mutationFn: (data: unknown) => transactionApi.create(data as any),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       setShowModal(false)
@@ -50,12 +72,12 @@ export default function RecurringTransactions() {
     },
   })
 
-  const accounts = accountsData?.data?.data || []
-  const categories = categoriesData?.data?.data || []
-  const recurringTransactions = recurringData?.data?.data?.list || []
+  const accounts = (accountsData?.data?.data || []) as Account[]
+  const categories = (categoriesData?.data?.data || []) as Category[]
+  const recurringTransactions = (recurringData?.data?.data as unknown as TransactionListResponse)?.list || []
 
-  const expenseCategories = categories.filter((c: any) => c.type === 'expense')
-  const incomeCategories = categories.filter((c: any) => c.type === 'income')
+  const expenseCategories = categories.filter((c) => c.type === 'expense')
+  const incomeCategories = categories.filter((c) => c.type === 'income')
 
   const resetForm = () => {
     setForm({
@@ -99,41 +121,41 @@ export default function RecurringTransactions() {
         </div>
 
         <div className="space-y-3">
-          {recurringTransactions.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <ArrowPathIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p>暂无周期记账</p>
-              <p className="text-sm">点击上方按钮添加周期记账</p>
+    {recurringTransactions.length === 0 ? (
+      <div className="text-center py-12 text-gray-500">
+        <ArrowPathIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+        <p>暂无周期记账</p>
+        <p className="text-sm">点击上方按钮添加周期记账</p>
+      </div>
+    ) : (
+      recurringTransactions.map((tx: Transaction) => (
+        <div key={tx.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+          <div className="flex items-center gap-4">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+              tx.type === 'income' ? 'bg-green-100' : 'bg-red-100'
+            }`}>
+              <span className={`text-lg font-bold ${tx.type === 'income' ? 'text-green-600' : 'text-red-500'}`}>
+                {tx.type === 'income' ? '+' : '-'}
+              </span>
             </div>
-          ) : (
-            recurringTransactions.map((tx: any) => (
-              <div key={tx.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    tx.type === 'income' ? 'bg-green-100' : 'bg-red-100'
-                  }`}>
-                    <span className={`text-lg font-bold ${tx.type === 'income' ? 'text-green-600' : 'text-red-500'}`}>
-                      {tx.type === 'income' ? '+' : '-'}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="font-medium">{tx.merchant || tx.category?.name || '未分类'}</p>
-                    <p className="text-sm text-gray-500">
-                      {tx.recurring_rule === 'daily' ? '每天' : 
-                       tx.recurring_rule === 'weekly' ? '每周' : 
-                       tx.recurring_rule === 'monthly' ? '每月' : '每年'}
-                      {' · '}下次: {tx.next_date ? new Date(tx.next_date).toLocaleDateString() : '-'}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className={`font-semibold text-lg ${tx.type === 'income' ? 'text-green-600' : 'text-red-500'}`}>
-                    {tx.type === 'income' ? '+' : '-'}¥{tx.amount?.toFixed(2)}
-                  </p>
-                </div>
-              </div>
-            ))
-          )}
+            <div>
+              <p className="font-medium">{tx.merchant || tx.category?.name || '未分类'}</p>
+              <p className="text-sm text-gray-500">
+                {tx.recurring_rule === 'daily' ? '每天' :
+                 tx.recurring_rule === 'weekly' ? '每周' :
+                 tx.recurring_rule === 'monthly' ? '每月' : '每年'}
+                {' · '}下次: {tx.next_date ? new Date(tx.next_date).toLocaleDateString() : '-'}
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className={`font-semibold text-lg ${tx.type === 'income' ? 'text-green-600' : 'text-red-500'}`}>
+              {tx.type === 'income' ? '+' : '-'}¥{tx.amount?.toFixed(2)}
+            </p>
+          </div>
+        </div>
+      ))
+    )}
         </div>
       </div>
 
@@ -185,7 +207,7 @@ export default function RecurringTransactions() {
                   required
                 >
                   <option value="">选择账户</option>
-                  {accounts.map((acc: any) => (
+                  {accounts.map((acc: Account) => (
                     <option key={acc.id} value={acc.id}>{acc.name}</option>
                   ))}
                 </select>
@@ -196,7 +218,7 @@ export default function RecurringTransactions() {
                   className="input"
                 >
                   <option value="">选择分类</option>
-                  {(form.type === 'expense' ? expenseCategories : incomeCategories).map((cat: any) => (
+                  {(form.type === 'expense' ? expenseCategories : incomeCategories).map((cat: Category) => (
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>

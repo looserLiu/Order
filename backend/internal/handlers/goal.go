@@ -3,26 +3,31 @@ package handlers
 import (
 	"net/http"
 	"time"
+
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-	"github.com/ledger/backend/internal/models"
+	"github.com/google/uuid"
+
+	"github.com/ledger/backend/internal/service"
 	"github.com/ledger/backend/pkg/middleware"
 	"github.com/ledger/backend/pkg/response"
 )
 
 type GoalHandler struct {
-	db *gorm.DB
+	goalService *service.GoalService
 }
 
-func NewGoalHandler(db *gorm.DB) *GoalHandler {
-	return &GoalHandler{db: db}
+func NewGoalHandler(goalService *service.GoalService) *GoalHandler {
+	return &GoalHandler{goalService: goalService}
 }
 
 func (h *GoalHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	var goals []models.FinancialGoal
-	h.db.Where("user_id = ?", userID).Order("created_at DESC").Find(&goals)
+	goals, err := h.goalService.List(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	response.Success(c, goals)
 }
@@ -42,23 +47,26 @@ func (h *GoalHandler) Create(c *gin.Context) {
 		deadline = &t
 	}
 
-	goal := models.FinancialGoal{
-		UserID:        userID,
-		Name:          req.Name,
-		TargetAmount:  req.TargetAmount,
-		CurrentAmount: req.CurrentAmount,
+	createReq := &service.GoalCreateRequest{
+		Name:         req.Name,
+		TargetAmount: req.TargetAmount,
 		Deadline:     deadline,
-		Category:      req.Category,
-		Note:          req.Note,
+		Category:     req.Category,
+		Note:         req.Note,
 	}
 
-	h.db.Create(&goal)
+	goal, err := h.goalService.Create(c.Request.Context(), userID, createReq)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	response.Success(c, goal)
 }
 
 func (h *GoalHandler) Update(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
 	var req CreateGoalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -66,34 +74,29 @@ func (h *GoalHandler) Update(c *gin.Context) {
 		return
 	}
 
-	var goal models.FinancialGoal
-	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&goal).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Goal not found")
-		return
-	}
+	updates := make(map[string]interface{})
+	updates["name"] = req.Name
+	updates["target_amount"] = req.TargetAmount
+	updates["category"] = req.Category
+	updates["note"] = req.Note
 
 	if req.Deadline != "" {
 		t, _ := time.Parse("2006-01-02", req.Deadline)
-		goal.Deadline = &t
+		updates["deadline"] = &t
 	}
 
-	goal.Name = req.Name
-	goal.TargetAmount = req.TargetAmount
-	goal.CurrentAmount = req.CurrentAmount
-	goal.Category = req.Category
-	goal.Note = req.Note
-
-	if goal.CurrentAmount >= goal.TargetAmount {
-		goal.Status = "completed"
+	goal, err := h.goalService.Update(c.Request.Context(), id, userID, updates)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	h.db.Save(&goal)
 	response.Success(c, goal)
 }
 
 func (h *GoalHandler) AddAmount(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
 	type AddAmountRequest struct {
 		Amount float64 `json:"amount" binding:"required"`
@@ -105,25 +108,23 @@ func (h *GoalHandler) AddAmount(c *gin.Context) {
 		return
 	}
 
-	var goal models.FinancialGoal
-	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&goal).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Goal not found")
+	goal, err := h.goalService.AddAmount(c.Request.Context(), id, userID, req.Amount)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	goal.CurrentAmount += req.Amount
-	if goal.CurrentAmount >= goal.TargetAmount {
-		goal.Status = "completed"
-	}
-
-	h.db.Save(&goal)
 	response.Success(c, goal)
 }
 
 func (h *GoalHandler) Delete(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
-	h.db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.FinancialGoal{})
+	if err := h.goalService.Delete(c.Request.Context(), id, userID); err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	response.SuccessWithMessage(c, "Goal deleted", nil)
 }

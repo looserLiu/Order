@@ -6,9 +6,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/ledger/backend/pkg/middleware"
 	"github.com/ledger/backend/pkg/response"
 )
 
@@ -21,8 +24,8 @@ func NewUploadHandler(db *gorm.DB) *UploadHandler {
 }
 
 func (h *UploadHandler) Upload(c *gin.Context) {
-	userID := c.GetString("user_id")
-	if userID == "" {
+	userID := middleware.GetUserID(c)
+	if userID == uuid.Nil {
 		response.Error(c, 401, "Unauthorized")
 		return
 	}
@@ -48,7 +51,7 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 	}
 
 	// Create upload directory
-	userDir := filepath.Join("uploads", userID)
+	userDir := filepath.Join("uploads", userID.String())
 	if err := os.MkdirAll(userDir, 0755); err != nil {
 		response.Error(c, 500, "Failed to create upload directory")
 		return
@@ -56,10 +59,10 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 
 	// Generate unique filename
 	filename := fmt.Sprintf("%s_%d%s", uuid.New().String(), time.Now().Unix(), ext)
-	filepath := filepath.Join(userDir, filename)
+	fp := filepath.Join(userDir, filename)
 
 	// Save file
-	if err := c.SaveUploadedFile(file, filepath); err != nil {
+	if err := c.SaveUploadedFile(file, fp); err != nil {
 		response.Error(c, 500, "Failed to save file")
 		return
 	}

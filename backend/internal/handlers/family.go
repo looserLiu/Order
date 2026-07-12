@@ -2,19 +2,24 @@ package handlers
 
 import (
 	"net/http"
+
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
+
 	"github.com/ledger/backend/internal/models"
+	"github.com/ledger/backend/internal/service"
 	"github.com/ledger/backend/pkg/middleware"
 	"github.com/ledger/backend/pkg/response"
 )
 
 type FamilyHandler struct {
-	db *gorm.DB
+	familyService *service.FamilyService
+	db            *gorm.DB
 }
 
-func NewFamilyHandler(db *gorm.DB) *FamilyHandler {
-	return &FamilyHandler{db: db}
+func NewFamilyHandler(familyService *service.FamilyService, db *gorm.DB) *FamilyHandler {
+	return &FamilyHandler{familyService: familyService, db: db}
 }
 
 func (h *FamilyHandler) List(c *gin.Context) {
@@ -38,13 +43,17 @@ func (h *FamilyHandler) Create(c *gin.Context) {
 		return
 	}
 
-	family := models.Family{
-		Name:    req.Name,
-		OwnerID: userID,
+	createReq := &service.FamilyCreateRequest{
+		Name: req.Name,
 	}
 
-	h.db.Create(&family)
+	family, err := h.familyService.Create(c.Request.Context(), userID, createReq)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
+	// Add owner as member
 	member := models.FamilyMember{
 		FamilyID: family.ID,
 		UserID:   userID,
@@ -57,7 +66,7 @@ func (h *FamilyHandler) Create(c *gin.Context) {
 
 func (h *FamilyHandler) Get(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
 	var family models.Family
 	if err := h.db.Where("id = ?", id).
@@ -73,7 +82,7 @@ func (h *FamilyHandler) Get(c *gin.Context) {
 
 func (h *FamilyHandler) AddMember(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
 	type AddMemberRequest struct {
 		Email string `json:"email" binding:"required,email"`
@@ -115,7 +124,7 @@ func (h *FamilyHandler) AddMember(c *gin.Context) {
 
 func (h *FamilyHandler) RemoveMember(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 	memberID := c.Param("member_id")
 
 	var family models.Family
@@ -130,7 +139,7 @@ func (h *FamilyHandler) RemoveMember(c *gin.Context) {
 
 func (h *FamilyHandler) Delete(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
 	var family models.Family
 	if err := h.db.Where("id = ? AND owner_id = ?", id, userID).First(&family).Error; err != nil {

@@ -2,26 +2,31 @@ package handlers
 
 import (
 	"net/http"
+
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-	"github.com/ledger/backend/internal/models"
+	"github.com/google/uuid"
+
+	"github.com/ledger/backend/internal/service"
 	"github.com/ledger/backend/pkg/middleware"
 	"github.com/ledger/backend/pkg/response"
 )
 
 type AccountHandler struct {
-	db *gorm.DB
+	accountService *service.AccountService
 }
 
-func NewAccountHandler(db *gorm.DB) *AccountHandler {
-	return &AccountHandler{db: db}
+func NewAccountHandler(accountService *service.AccountService) *AccountHandler {
+	return &AccountHandler{accountService: accountService}
 }
 
 func (h *AccountHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	var accounts []models.Account
-	h.db.Where("user_id = ?", userID).Order("sort_order ASC").Find(&accounts)
+	accounts, err := h.accountService.List(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	response.Success(c, accounts)
 }
@@ -29,34 +34,27 @@ func (h *AccountHandler) List(c *gin.Context) {
 func (h *AccountHandler) Create(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	var req CreateAccountRequest
+	var req service.AccountCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	account := models.Account{
-		UserID:    userID,
-		Name:      req.Name,
-		Type:      req.Type,
-		Balance:   req.Balance,
-		Currency:  req.Currency,
-		Icon:      req.Icon,
-		Color:     req.Color,
-		IsDefault: req.IsDefault,
-		SortOrder: req.SortOrder,
+	account, err := h.accountService.Create(c.Request.Context(), userID, &req)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	h.db.Create(&account)
 	response.Success(c, account)
 }
 
 func (h *AccountHandler) Get(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
-	var account models.Account
-	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&account).Error; err != nil {
+	account, err := h.accountService.Get(c.Request.Context(), id, userID)
+	if err != nil {
 		response.Error(c, http.StatusNotFound, "Account not found")
 		return
 	}
@@ -66,39 +64,46 @@ func (h *AccountHandler) Get(c *gin.Context) {
 
 func (h *AccountHandler) Update(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
-	var req CreateAccountRequest
+	var req service.AccountCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	var account models.Account
-	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&account).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Account not found")
+	updates := make(map[string]interface{})
+	if req.Name != "" {
+		updates["name"] = req.Name
+	}
+	if req.Type != "" {
+		updates["type"] = req.Type
+	}
+	if req.Currency != "" {
+		updates["currency"] = req.Currency
+	}
+	if req.Icon != "" {
+		updates["icon"] = req.Icon
+	}
+	if req.Color != "" {
+		updates["color"] = req.Color
+	}
+
+	account, err := h.accountService.Update(c.Request.Context(), id, userID, updates)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	account.Name = req.Name
-	account.Type = req.Type
-	account.Balance = req.Balance
-	account.Currency = req.Currency
-	account.Icon = req.Icon
-	account.Color = req.Color
-	account.IsDefault = req.IsDefault
-	account.SortOrder = req.SortOrder
-
-	h.db.Save(&account)
 	response.Success(c, account)
 }
 
 func (h *AccountHandler) Delete(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
-	if err := h.db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Account{}).Error; err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to delete account")
+	if err := h.accountService.Delete(c.Request.Context(), id, userID); err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -108,8 +113,11 @@ func (h *AccountHandler) Delete(c *gin.Context) {
 func (h *AccountHandler) GetTotalBalance(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	var total float64
-	h.db.Model(&models.Account{}).Where("user_id = ?", userID).Select("COALESCE(SUM(balance), 0)").Scan(&total)
+	balance, err := h.accountService.GetTotalBalance(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-	response.Success(c, gin.H{"total_balance": total})
+	response.Success(c, gin.H{"total_balance": balance})
 }

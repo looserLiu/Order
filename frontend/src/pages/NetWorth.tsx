@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
-import { netWorthApi, assetApi, accountApi } from '../services/api'
-import { 
-  BanknotesIcon, 
-  CreditCardIcon, 
+import { netWorthApi, assetApi, accountApi, Account, AssetChange } from '../services/api'
+import {
+  BanknotesIcon,
+  CreditCardIcon,
   ChartBarIcon,
   ArrowTrendingUpIcon,
   WalletIcon
@@ -10,6 +10,15 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts'
 
 const COLORS = ['#27AE60', '#E74C3C', '#3498DB', '#F39C12', '#9B59B6']
+
+// NetWorth response type
+interface NetWorthResponse {
+  net_worth: number
+  total_assets: number
+  total_investment: number
+  total_debt_owed: number
+  total_debt_owing: number
+}
 
 export default function NetWorth() {
   const { data: netWorthData } = useQuery({
@@ -27,9 +36,9 @@ export default function NetWorth() {
     queryFn: () => assetApi.list({ type: 'investment' }),
   })
 
-  const netWorth = netWorthData?.data?.data || {}
-  const accounts = accountsData?.data?.data || []
-  const investments = assetsData?.data?.data || []
+  const netWorth = (netWorthData?.data?.data || {}) as NetWorthResponse
+  const accounts = (accountsData?.data?.data || []) as Account[]
+  const investments = (assetsData?.data?.data || []) as AssetChange[]
 
   const assetData = [
     { name: '账户余额', value: netWorth.total_assets || 0 },
@@ -154,7 +163,7 @@ export default function NetWorth() {
         <div className="card">
           <h3 className="font-semibold mb-4">账户明细</h3>
           <div className="space-y-3">
-            {accounts.slice(0, 6).map((acc: any) => (
+            {accounts.slice(0, 6).map((acc: Account) => (
               <div key={acc.id} className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: acc.color || '#999' }} />
@@ -198,11 +207,11 @@ export default function NetWorth() {
         <div className="card">
           <h3 className="font-semibold mb-4">投资账户</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {investments.map((inv: any) => (
+            {investments.map((inv: AssetChange) => (
               <div key={inv.id} className="p-4 border rounded-lg">
                 <p className="font-medium">{inv.name}</p>
                 <p className="text-xl font-bold text-purple-600 mt-1">¥{inv.amount?.toFixed(2)}</p>
-                {inv.interest_rate > 0 && (
+                {inv.interest_rate && inv.interest_rate > 0 && (
                   <p className="text-xs text-gray-500 mt-1">利率: {inv.interest_rate}%</p>
                 )}
               </div>

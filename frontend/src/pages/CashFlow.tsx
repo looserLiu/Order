@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { cashFlowApi, accountApi } from '../services/api'
+import { cashFlowApi, accountApi, CashFlowProjection } from '../services/api'
 import { 
   AreaChart, 
   Area, 
@@ -13,6 +13,13 @@ import {
   Bar
 } from 'recharts'
 import { ArrowTrendingUpIcon, ArrowTrendingDownIcon, CurrencyDollarIcon, CalendarIcon } from '@heroicons/react/24/outline'
+import { LoadingSpinner } from '../components/LoadingSpinner'
+
+// Cash flow response type
+interface CashFlowResponse {
+  total: number
+  projections: CashFlowProjection[]
+}
 
 export default function CashFlow() {
   const [days, setDays] = useState(30)
@@ -34,11 +41,11 @@ export default function CashFlow() {
   })
 
   const currentBalance = balanceData?.total || 0
-  const projections = projectionData?.projections || []
-  const endBalance = projections.length > 0 ? projections[projections.length - 1].projected_bal : currentBalance
+  const projections = (projectionData as CashFlowResponse)?.projections || []
+  const endBalance = projections.length > 0 ? projections[projections.length - 1].projected_balance : currentBalance
 
-  const totalIncome = projections.reduce((sum: number, p: any) => sum + p.income, 0)
-  const totalExpense = projections.reduce((sum: number, p: any) => sum + p.expense, 0)
+  const totalIncome = projections.reduce((sum: number, p: CashFlowProjection) => sum + p.income, 0)
+  const totalExpense = projections.reduce((sum: number, p: CashFlowProjection) => sum + p.expense, 0)
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('zh-CN', {
@@ -127,7 +134,7 @@ export default function CashFlow() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">余额趋势预测</h2>
         {isLoading ? (
           <div className="h-80 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            <LoadingSpinner size="lg" />
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
@@ -154,7 +161,7 @@ export default function CashFlow() {
               />
               <Area 
                 type="monotone" 
-                dataKey="projected_bal" 
+                dataKey="projected_balance" 
                 stroke="#3B82F6" 
                 fill="#3B82F6" 
                 fillOpacity={0.3}
@@ -170,7 +177,7 @@ export default function CashFlow() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">每日收支</h2>
         {isLoading ? (
           <div className="h-80 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            <LoadingSpinner size="lg" />
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={300}>
@@ -215,7 +222,7 @@ export default function CashFlow() {
               </tr>
             </thead>
             <tbody>
-              {projections.slice(0, 14).map((day: any, index: number) => (
+              {projections.slice(0, 14).map((day: CashFlowProjection, index: number) => (
                 <tr key={index} className="border-b border-gray-100 dark:border-gray-700">
                   <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">{day.date}</td>
                   <td className="py-3 px-4 text-sm text-right text-green-600 dark:text-green-400">
@@ -225,7 +232,7 @@ export default function CashFlow() {
                     {day.expense > 0 ? formatCurrency(day.expense) : '-'}
                   </td>
                   <td className="py-3 px-4 text-sm text-right font-medium text-gray-900 dark:text-white">
-                    {formatCurrency(day.projected_bal)}
+                    {formatCurrency(day.projected_balance)}
                   </td>
                 </tr>
               ))}

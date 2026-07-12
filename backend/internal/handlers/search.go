@@ -2,19 +2,20 @@ package handlers
 
 import (
 	"net/http"
+
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-	"github.com/ledger/backend/internal/models"
+
+	"github.com/ledger/backend/internal/service"
 	"github.com/ledger/backend/pkg/middleware"
 	"github.com/ledger/backend/pkg/response"
 )
 
 type SearchHandler struct {
-	db *gorm.DB
+	searchService *service.SearchService
 }
 
-func NewSearchHandler(db *gorm.DB) *SearchHandler {
-	return &SearchHandler{db: db}
+func NewSearchHandler(searchService *service.SearchService) *SearchHandler {
+	return &SearchHandler{searchService: searchService}
 }
 
 func (h *SearchHandler) Search(c *gin.Context) {
@@ -27,27 +28,11 @@ func (h *SearchHandler) Search(c *gin.Context) {
 		return
 	}
 
-	limit := 20
-
-	var transactions []models.Transaction
-	if searchType == "all" || searchType == "transactions" {
-		h.db.Where("user_id = ? AND (note ILIKE ? OR merchant ILIKE ?)", userID, "%"+keyword+"%", "%"+keyword+"%").
-			Order("bill_date DESC").Limit(limit).Preload("Category").Preload("Account").Find(&transactions)
+	result, err := h.searchService.Search(c.Request.Context(), userID, keyword, searchType, 20)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	var accounts []models.Account
-	if searchType == "all" || searchType == "accounts" {
-		h.db.Where("user_id = ? AND name ILIKE ?", userID, "%"+keyword+"%").Limit(limit).Find(&accounts)
-	}
-
-	var categories []models.Category
-	if searchType == "all" || searchType == "categories" {
-		h.db.Where("user_id = ? AND name ILIKE ?", userID, "%"+keyword+"%").Limit(limit).Find(&categories)
-	}
-
-	response.Success(c, gin.H{
-		"transactions": transactions,
-		"accounts":     accounts,
-		"categories":   categories,
-	})
+	response.Success(c, result)
 }

@@ -2,26 +2,31 @@ package handlers
 
 import (
 	"net/http"
+
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-	"github.com/ledger/backend/internal/models"
+	"github.com/google/uuid"
+
+	"github.com/ledger/backend/internal/service"
 	"github.com/ledger/backend/pkg/middleware"
 	"github.com/ledger/backend/pkg/response"
 )
 
 type TagHandler struct {
-	db *gorm.DB
+	tagService *service.TagService
 }
 
-func NewTagHandler(db *gorm.DB) *TagHandler {
-	return &TagHandler{db: db}
+func NewTagHandler(tagService *service.TagService) *TagHandler {
+	return &TagHandler{tagService: tagService}
 }
 
 func (h *TagHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	var tags []models.Tag
-	h.db.Where("user_id = ?", userID).Order("created_at DESC").Find(&tags)
+	tags, err := h.tagService.List(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	response.Success(c, tags)
 }
@@ -29,49 +34,56 @@ func (h *TagHandler) List(c *gin.Context) {
 func (h *TagHandler) Create(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	var req CreateTagRequest
+	var req service.TagCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	tag := models.Tag{
-		UserID: userID,
-		Name:   req.Name,
-		Color:  req.Color,
+	tag, err := h.tagService.Create(c.Request.Context(), userID, &req)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	h.db.Create(&tag)
 	response.Success(c, tag)
 }
 
 func (h *TagHandler) Update(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
-	var req CreateTagRequest
+	var req service.TagCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	var tag models.Tag
-	if err := h.db.Where("id = ? AND user_id = ?", id, userID).First(&tag).Error; err != nil {
-		response.Error(c, http.StatusNotFound, "Tag not found")
-		return
+	updates := make(map[string]interface{})
+	if req.Name != "" {
+		updates["name"] = req.Name
+	}
+	if req.Color != "" {
+		updates["color"] = req.Color
 	}
 
-	tag.Name = req.Name
-	tag.Color = req.Color
-	h.db.Save(&tag)
+	tag, err := h.tagService.Update(c.Request.Context(), id, userID, updates)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	response.Success(c, tag)
 }
 
 func (h *TagHandler) Delete(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	id := c.Param("id")
+	id, _ := uuid.Parse(c.Param("id"))
 
-	h.db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Tag{})
+	if err := h.tagService.Delete(c.Request.Context(), id, userID); err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	response.SuccessWithMessage(c, "Tag deleted", nil)
 }

@@ -18,13 +18,13 @@ func NewBudgetAlertHandler(db *gorm.DB) *BudgetAlertHandler {
 }
 
 func (h *BudgetAlertHandler) GetAlerts(c *gin.Context) {
-	userID := c.GetString("user_id")
-	if userID == "" {
+	userID := middleware.GetUserID(c)
+	if userID == uuid.Nil {
 		response.Error(c, 401, "Unauthorized")
 		return
 	}
 
-	uid, _ := uuid.Parse(userID)
+	uid := userID
 
 	// Get current month date range
 	now := time.Now()

@@ -1,13 +1,28 @@
-import { useState } from 'react'
+import { useState, FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { goalApi } from '../services/api'
+import { goalApi, FinancialGoal } from '../services/api'
 import { PlusIcon, PencilIcon, TrashIcon, TrophyIcon } from '@heroicons/react/24/outline'
+
+// Form state type
+interface GoalForm {
+  name: string
+  target_amount: number
+  current_amount: number
+  deadline: string
+  category: string
+  note: string
+}
+
+// Amount form type
+interface AmountForm {
+  amount: number
+}
 
 export default function Goals() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showAddAmount, setShowAddAmount] = useState<string | null>(null)
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<GoalForm>({
     name: '',
     target_amount: 0,
     current_amount: 0,
@@ -15,7 +30,7 @@ export default function Goals() {
     category: 'savings',
     note: '',
   })
-  const [amountForm, setAmountForm] = useState({ amount: 0 })
+  const [amountForm, setAmountForm] = useState<AmountForm>({ amount: 0 })
   const queryClient = useQueryClient()
 
   const { data } = useQuery({
@@ -24,7 +39,7 @@ export default function Goals() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => goalApi.create(data),
+    mutationFn: (data: GoalForm) => goalApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] })
       closeModal()
@@ -32,7 +47,7 @@ export default function Goals() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => goalApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<GoalForm> }) => goalApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] })
       closeModal()
@@ -40,7 +55,7 @@ export default function Goals() {
   })
 
   const addAmountMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => goalApi.addAmount(id, data),
+    mutationFn: ({ id, data }: { id: string; data: AmountForm }) => goalApi.addAmount(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] })
       setShowAddAmount(null)
@@ -52,9 +67,9 @@ export default function Goals() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['goals'] }),
   })
 
-  const goals = data?.data?.data || []
+  const goals = data?.data.data || []
 
-  const openModal = (goal?: any) => {
+  const openModal = (goal?: FinancialGoal) => {
     if (goal) {
       setEditingId(goal.id)
       setForm({
@@ -84,7 +99,7 @@ export default function Goals() {
     setEditingId(null)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: form })
@@ -127,7 +142,7 @@ export default function Goals() {
       </div>
 
       <div className="grid gap-4">
-        {goals.map((goal: any) => {
+        {goals.map((goal: FinancialGoal) => {
           const progress = goal.target_amount > 0 ? (goal.current_amount / goal.target_amount) * 100 : 0
           const isCompleted = goal.status === 'completed'
 
@@ -137,8 +152,8 @@ export default function Goals() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-lg">{goal.name}</h3>
-                    <span className={`px-2 py-0.5 rounded text-xs ${getCategoryColor(goal.category)}`}>
-                      {getCategoryText(goal.category)}
+                    <span className={`px-2 py-0.5 rounded text-xs ${getCategoryColor(goal.category || '')}`}>
+                      {getCategoryText(goal.category || '')}
                     </span>
                     {isCompleted && (
                       <span className="px-2 py-0.5 rounded text-xs bg-green-600 text-white">已完成</span>
